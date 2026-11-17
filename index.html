@@ -751,11 +751,10 @@
                 id: "kitchen",
                 tab: "loop",
                 name: "Küchenhilfe",
-                desc: "Hilft in der Küche und bringt Essen. Wiederholt sich, solange die Energie reicht.",
+                desc: "Hilft in der Küche und bringt Essen. Muss nach jedem Abschluss neu gestartet werden.",
                 visible: () => (state.inventory.kitchenKnife || 0) > 0,
                 drain: { energy: 2 },
                 duration: 10,
-                repeat: true,
                 gain: () => ({ food: 0.2 + statBonus("kitchenFood") }),
                 onComplete: () => rollLoot([{ chance: 1, give: { money: 2 } }]),
                 info: () => `Dauer 10 Ticks · +${fmt(0.2 + statBonus("kitchenFood"))} Essen/Tick · -2 Energie/Tick · +2 Gold bei Abschluss · ${usesOf("kitchen")}x abgeschlossen`
@@ -813,6 +812,7 @@
                 requires: { maxEnergy: 20 },
                 drain: { health: 1, energy: 2 },
                 duration: 10,
+                maxUses: 1,
                 loot: [
                     { chance: 1.0, give: { fame: 10 } },
                     { chance: 1.0, item: "foxTail", amount: 1 },
@@ -855,6 +855,7 @@
                 desc: "Ausgerüstet: +5 max. Gesundheit, +3 max. Energie.",
                 visible: () => !!state.flags.foxTailFound,
                 duration: 1,
+                maxUses: 1,
                 noCrit: true,
                 problem: () => isEquipped("foxTail") ? "Der Fuchsschwanz ist bereits ausgerüstet" : ((state.loot.foxTail || 0) <= 0 ? "Kein Fuchsschwanz vorhanden" : ""),
                 onComplete: () => {
@@ -1364,7 +1365,8 @@
 
         function usesOf(id) { return state.uses[id] || 0; }
         function isMaxedActivity(a) { return a.maxUses != null && usesOf(a.id) >= a.maxUses; }
-        function isVisible(a) { return !a.visible || a.visible(); }
+        // Abgeschlossene (maxUses erreicht) Training-/Aktions-Einträge verschwinden; Loop-Aktionen ohne maxUses bleiben
+        function isVisible(a) { return !isMaxedActivity(a) && (!a.visible || a.visible()); }
 
         // Angriff = Grundwert + Items + Ganzkörpertraining
         function atk() {
