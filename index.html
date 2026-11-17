@@ -1,14 +1,16 @@
+tml
 <!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Chronicle Prototyp</title>
+    <title>Chronicle Engine</title>
     <style>
         :root {
             --bg-color: #121214;
             --card-bg: #1e1e24;
             --accent: #4e89ae;
+            --success: #4ea870;
             --danger: #a84a4a;
             --text-main: #e1e1e6;
             --text-muted: #9a9aa2;
@@ -40,16 +42,25 @@
             padding-bottom: env(safe-area-inset-bottom);
         }
 
-        /* --- OBERE RESSOURCEN-LEISTE --- */
+        /* --- DYNAMISCHE RESSOURCEN-LEISTE OBEN --- */
         header {
             background-color: var(--card-bg);
-            padding: 16px;
+            padding: 14px 12px;
             border-bottom: 1px solid var(--border);
             display: flex;
+            flex-wrap: wrap;
             justify-content: space-around;
-            font-size: 1.1rem;
+            gap: 10px;
+            font-size: 1rem;
             font-weight: bold;
             flex-shrink: 0;
+        }
+
+        .res-box {
+            background: #16161b;
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
 
         .res-box span {
@@ -75,7 +86,7 @@
         }
 
         h2 {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             margin-bottom: 12px;
             color: var(--text-muted);
             text-transform: uppercase;
@@ -84,7 +95,7 @@
 
         /* --- STORY LOG --- */
         #story-log {
-            max-height: 130px;
+            max-height: 120px;
             overflow-y: auto;
             font-size: 0.95rem;
             line-height: 1.5;
@@ -94,12 +105,12 @@
             gap: 8px;
         }
 
-        .log-highlight {
+        .log-new {
             color: var(--accent);
-            font-weight: bold;
+            font-weight: 500;
         }
 
-        /* --- TOUCH-OPTIMIERTE BUTTONS --- */
+        /* --- TOUCH-BUTTONS --- */
         .action-btn {
             width: 100%;
             background-color: #272730;
@@ -108,22 +119,23 @@
             padding: 16px;
             color: var(--text-main);
             text-align: left;
-            position: relative;
-            overflow: hidden;
             margin-bottom: 12px;
             cursor: pointer;
+            transition: transform 0.06s, background-color 0.15s;
         }
 
         .action-btn:last-child {
             margin-bottom: 0;
         }
 
-        .action-btn:active {
-            transform: scale(0.98);
+        .action-btn:active:not(:disabled) {
+            transform: scale(0.97);
+            background-color: #32323e;
         }
 
         .action-btn:disabled {
-            opacity: 0.45;
+            opacity: 0.4;
+            cursor: not-allowed;
         }
 
         .danger-btn {
@@ -139,27 +151,17 @@
             align-items: center;
             font-size: 1.05rem;
             font-weight: bold;
-            position: relative;
-            z-index: 2;
+        }
+
+        .btn-reward {
+            color: var(--success);
+            font-size: 0.95rem;
         }
 
         .btn-desc {
             font-size: 0.85rem;
             color: var(--text-muted);
             margin-top: 6px;
-            position: relative;
-            z-index: 2;
-        }
-
-        .progress-fill {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            background-color: rgba(78, 137, 174, 0.35);
-            width: 0%;
-            z-index: 1;
-            transition: width 0.1s linear;
         }
 
         /* --- UNTERE NAVIGATION --- */
@@ -193,10 +195,8 @@
 </head>
 <body>
 
-    <header>
-        <div class="res-box">Energie: <span id="res-energy">10</span>/<span id="res-max-energy">10</span></div>
-        <div class="res-box">Wissen: <span id="res-knowledge">0</span></div>
-    </header>
+    <!-- WIRD AUTOMATISCH AUS DEN RESSOURCEN GENERIERT -->
+    <header id="resource-bar"></header>
 
     <main>
         <section class="card">
@@ -206,48 +206,24 @@
             </div>
         </section>
 
-        <!-- TAB 1: AKTIONEN -->
+        <!-- TAB 1: DYNAMISCHE AKTIONEN -->
         <section id="tab-actions" class="card">
             <h2>Aktionen</h2>
-            
-            <button class="action-btn" id="btn-meditate" onclick="toggleAction('meditate')">
-                <div class="progress-fill" id="prog-meditate"></div>
-                <div class="btn-header">
-                    <span>Meditieren</span>
-                    <span>+1 Wissen</span>
-                </div>
-                <div class="btn-desc">Kostet 2 Energie | Dauer: 2 Sek.</div>
-            </button>
-
-            <button class="action-btn" id="btn-rest" onclick="toggleAction('rest')">
-                <div class="progress-fill" id="prog-rest"></div>
-                <div class="btn-header">
-                    <span>Ausruhen</span>
-                    <span>+5 Energie</span>
-                </div>
-                <div class="btn-desc">Regeneriert deine Kraft | Dauer: 3 Sek.</div>
-            </button>
+            <div id="actions-container"></div>
         </section>
 
-        <!-- TAB 2: UPGRADES -->
+        <!-- TAB 2: DYNAMISCHE UPGRADES -->
         <section id="tab-upgrades" class="card hidden">
             <h2>Erkenntnisse</h2>
-            
-            <button class="action-btn" id="upg-mind" onclick="buyUpgrade('mind')">
-                <div class="btn-header">
-                    <span>Geist erweitern (Stufe <span id="lvl-mind">0</span>)</span>
-                    <span id="cost-mind">5 Wissen</span>
-                </div>
-                <div class="btn-desc">Erhöht maximale Energie um +5</div>
-            </button>
+            <div id="upgrades-container"></div>
         </section>
 
-        <!-- TAB 3: SYSTEM / SPEICHERN -->
+        <!-- TAB 3: SYSTEM -->
         <section id="tab-system" class="card hidden">
             <h2>System</h2>
             <button class="action-btn" onclick="saveGame(true)">
-                <div class="btn-header"><span>Spielstand manuell speichern</span></div>
-                <div class="btn-desc" id="save-status">Speichert automatisch alle 5 Sekunden</div>
+                <div class="btn-header"><span>Spielstand speichern</span></div>
+                <div class="btn-desc" id="save-status">Speichert automatisch bei jeder Aktion</div>
             </button>
 
             <button class="action-btn danger-btn" onclick="resetGame()">
@@ -263,174 +239,245 @@
     </nav>
 
     <script>
-        const SAVE_KEY = "chronicle_proto_save_v1";
-
-        // Standardwerte für ein neues Spiel
-        const defaultGame = {
-            energy: 10,
-            maxEnergy: 10,
-            knowledge: 0,
-            activeAction: null,
-            progress: 0,
-            lastSaved: Date.now(),
-            storyFlags: { firstKnowledge: false },
-            upgrades: { mind: { level: 0, cost: 5 } }
+        /* =================================================================
+           1. SPIEL-DATEN (HIER EINFACH NEUE INHALTE HINZUFÜGEN!)
+           ================================================================= */
+        
+        // Definition aller Ressourcen
+        const RESOURCE_CONFIG = {
+            energy:    { name: "Energie", hasMax: true,  start: 10, max: 10, unlocked: true },
+            knowledge: { name: "Wissen",  hasMax: false, start: 0,  max: 0,  unlocked: true },
+            mana:      { name: "Mana",    hasMax: true,  start: 0,  max: 5,  unlocked: false } // Schaltet sich später frei!
         };
 
-        let game = JSON.parse(JSON.stringify(defaultGame));
-
-        const actions = {
-            meditate: { duration: 2.0, energyCost: 2 },
-            rest: { duration: 3.0, energyCost: 0 }
-        };
-
-        /* --- SPEICHERN, LADEN & OFFLINE-FORTSCHRITT --- */
-        function saveGame(manual = false) {
-            game.lastSaved = Date.now();
-            localStorage.setItem(SAVE_KEY, JSON.stringify(game));
-            if (manual) {
-                document.getElementById('save-status').textContent = "Gespeichert um " + new Date().toLocaleTimeString();
+        // Definition aller klickbaren Aktionen
+        const ACTION_CONFIG = [
+            {
+                id: "meditate",
+                name: "Meditieren",
+                desc: "Sammle deine Gedanken in der Stille.",
+                cost:   { energy: 2 },
+                reward: { knowledge: 1 },
+                condition: () => true // Immer sichtbar
+            },
+            {
+                id: "rest",
+                name: "Ausruhen",
+                desc: "Schließe die Augen und schöpfe neue Kraft.",
+                cost:   {},
+                reward: { energy: 5 },
+                condition: () => true,
+                // Spezialregel: Nur klickbar, wenn Energie nicht voll ist
+                customCanRun: (state) => state.resources.energy.current < state.resources.energy.max
+            },
+            {
+                id: "explore_room",
+                name: "Kammer absuchen",
+                desc: "Tastend untersuchst du die kalten Steinwände.",
+                cost:   { energy: 4 },
+                reward: { knowledge: 3 },
+                condition: (state) => state.resources.knowledge.current >= 3 // Erscheint erst ab 3 Wissen!
+            },
+            {
+                id: "channel_mana",
+                name: "Arkane Energie kanalisieren",
+                desc: "Wandle tiefes Wissen in reine Magie um.",
+                cost:   { energy: 3, knowledge: 2 },
+                reward: { mana: 1 },
+                condition: (state) => state.resources.mana.unlocked // Erscheint erst, wenn Mana freigeschaltet ist!
             }
-        }
+        ];
 
-        function loadGame() {
-            const savedData = localStorage.getItem(SAVE_KEY);
-            if (!savedData) return;
-
-            try {
-                const parsed = JSON.parse(savedData);
-                // Führt gespeicherte Werte sicher mit Standardwerten zusammen
-                game = {
-                    ...defaultGame,
-                    ...parsed,
-                    storyFlags: { ...defaultGame.storyFlags, ...(parsed.storyFlags || {}) },
-                    upgrades: { ...defaultGame.upgrades, ...(parsed.upgrades || {}) }
-                };
-
-                calculateOfflineProgress();
-            } catch (e) {
-                console.error("Fehler beim Laden des Spielstands:", e);
-            }
-        }
-
-        function calculateOfflineProgress() {
-            const now = Date.now();
-            const secondsPassed = Math.floor((now - game.lastSaved) / 1000);
-
-            if (secondsPassed > 2 && game.activeAction) {
-                const actId = game.activeAction;
-                const act = actions[actId];
-                // Maximal 24 Stunden (86400 Sek.) Offline-Fortschritt berechnen
-const effectiveSeconds = Math.min(secondsPassed, 86400);
-const possibleCompletions = Math.floor(effectiveSeconds / act.duration);
-let completedCount = 0;
-for (let i = 0; i < possibleCompletions; i++) {
-if (canStartAction(actId)) {
-completeAction(actId);
-completedCount++;
-} else {
-game.activeAction = null;
-game.progress = 0;
-break;
+        // Definition aller Upgrades
+        const UPGRADE_CONFIG = [
+            {
+                id: "expand_mind",
+                name: "Geist erweitern",
+                desc: "Erhöht deine maximale Energie dauerhaft um +5.",
+                baseCost: { knowledge: 5 },
+                costMultiplier: 1.5,
+                condition: () => true,
+                onBuy: (state) => {
+                    state.resources.energy.max += 5;
+                    addStoryLog("Dein Geist fühlt sich weiter an. Maximale Energie erhöht!");
+                }
+            },
+            {
+                id: "awaken_magic",
+                name: "Magisches Gespür wecken",
+                desc: "Schaltet die Ressource Mana und neue Aktionen frei.",
+                baseCost: { knowledge: 10 },
+                costMultiplier: 2.0,
+                maxLevel: 1, // Kann nur 1x gekauft werden
+                condition: (state) => state.resources.knowledge.current >= 5,
+                onBuy: (state) => {
+                    state.resources.mana.unlocked = true;
+                    addStoryLog("Ein Kribbeln durchfährt deine Finger. Du spürst nun Mana!");
+                }
+                }
+];
+/* =================================================================
+2. SPIELZUSTAND & INITIALISIERUNG
+================================================================= */
+const SAVE_KEY = "chronicle_modular_v1";
+let state = {
+resources: {},
+upgrades: {},
+triggeredEvents: {}
+};
+function initDefaultState() {
+state.resources = {};
+for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
+state.resources[key] = {
+current: cfg.start,
+max: cfg.max,
+unlocked: cfg.unlocked
+};
 }
+state.upgrades = {};
+for (const upg of UPGRADE_CONFIG) {
+state.upgrades[upg.id] = { level: 0 };
 }
-if (completedCount > 0) {
-addStoryLog(Während deiner Abwesenheit (${secondsPassed} Sek.) wurde "${actId}" ${completedCount}x ausgeführt., true);
+state.triggeredEvents = {};
 }
-}
-}
-function resetGame() {
-if (confirm("Möchtest du deinen Spielstand wirklich unwiderruflich löschen?")) {
-localStorage.removeItem(SAVE_KEY);
-location.reload();
-}
-}
-/* --- SPIELSCHLEIFE --- */
-const TICK_RATE = 100;
-setInterval(() => {
-if (game.activeAction) {
-const act = actions[game.activeAction];
-game.progress += (TICK_RATE / 1000) / act.duration;
-if (game.progress >= 1) {
-completeAction(game.activeAction);
-game.progress = 0;
-if (!canStartAction(game.activeAction)) {
-game.activeAction = null;
-}
-}
-}
-updateUI();
-}, TICK_RATE);
-// Automatisches Speichern alle 5 Sekunden
-setInterval(() => saveGame(false), 5000);
-/* --- SPIELLOGIK --- */
-function canStartAction(actionId) {
-if (actionId === 'meditate') return game.energy >= actions.meditate.energyCost;
-if (actionId === 'rest') return game.energy < game.maxEnergy;
+/* =================================================================
+3. KERNLOGIK (KLICKS, KOSTEN, BELOHNUNGEN)
+================================================================= */
+// Prüft, ob genug Ressourcen für eine Kostenliste vorhanden sind
+function canAfford(costObj) {
+for (const [resKey, amount] of Object.entries(costObj)) {
+if (!state.resources[resKey] || state.resources[resKey].current < amount) {
 return false;
 }
-function toggleAction(actionId) {
-if (game.activeAction === actionId) {
-game.activeAction = null;
-game.progress = 0;
-} else if (canStartAction(actionId)) {
-game.activeAction = actionId;
-game.progress = 0;
 }
-saveGame(false);
-updateUI();
+return true;
 }
-function completeAction(actionId) {
-if (actionId === 'meditate') {
-game.energy -= actions.meditate.energyCost;
-game.knowledge += 1;
-checkStoryEvents();
-} else if (actionId === 'rest') {
-game.energy = Math.min(game.maxEnergy, game.energy + 5);
+// Zieht Kosten ab
+function payCost(costObj) {
+for (const [resKey, amount] of Object.entries(costObj)) {
+state.resources[resKey].current -= amount;
 }
 }
+// Schreibt Belohnungen gut (achtet auf Maximum!)
+function giveReward(rewardObj) {
+for (const [resKey, amount] of Object.entries(rewardObj)) {
+const res = state.resources[resKey];
+const cfg = RESOURCE_CONFIG[resKey];
+res.unlocked = true; // Schaltet Ressource automatisch sichtbar, falls man sie erhält
+if (cfg.hasMax) {
+res.current = Math.min(res.max, res.current + amount);
+} else {
+res.current += amount;
+}
+}
+}
+// Wird bei jedem Klick auf eine Aktion ausgeführt
+function executeAction(actionId) {
+const action = ACTION_CONFIG.find(a => a.id === actionId);
+if (!action) return;
+if (!canAfford(action.cost)) return;
+if (action.customCanRun && !action.customCanRun(state)) return;
+payCost(action.cost);
+giveReward(action.reward);
+checkStoryTriggers();
+saveGame();
+renderUI();
+}
+// Wird bei jedem Klick auf ein Upgrade ausgeführt
 function buyUpgrade(upgId) {
-const upg = game.upgrades[upgId];
-if (game.knowledge >= upg.cost) {
-game.knowledge -= upg.cost;
-upg.level += 1;
-upg.cost = Math.floor(upg.cost * 1.5);
-if (upgId === 'mind') {
-game.maxEnergy += 5;
-addStoryLog("Dein Geist fühlt sich klarer an. Du kannst nun mehr Energie speichern.");
+const upg = UPGRADE_CONFIG.find(u => u.id === upgId);
+const upgState = state.upgrades[upgId];
+if (!upg) return;
+if (upg.maxLevel && upgState.level >= upg.maxLevel) return;
+const currentCost = getUpgradeCost(upg, upgState.level);
+if (!canAfford(currentCost)) return;
+payCost(currentCost);
+upgState.level += 1;
+if (upg.onBuy) upg.onBuy(state);
+saveGame();
+renderUI();
 }
-saveGame(false);
-updateUI();
+function getUpgradeCost(upg, level) {
+const cost = {};
+for (const [resKey, baseAmount] of Object.entries(upg.baseCost)) {
+cost[resKey] = Math.floor(baseAmount * Math.pow(upg.costMultiplier, level));
+}
+return cost;
+}
+/* =================================================================
+4. STORY-EVENTS & LOG
+================================================================= */
+function checkStoryTriggers() {
+if (state.resources.knowledge.current >= 1 && !state.triggeredEvents.firstMeditation) {
+state.triggeredEvents.firstMeditation = true;
+addStoryLog("Deine Gedanken klären sich. Du bemerkst, dass du deine Umgebung untersuchen kannst.");
+}
+if (state.resources.knowledge.current >= 3 && !state.triggeredEvents.unlockedExplore) {
+state.triggeredEvents.unlockedExplore = true;
+addStoryLog("Neue Aktion freigeschaltet: Kammer absuchen!");
 }
 }
-function checkStoryEvents() {
-if (game.knowledge >= 1 && !game.storyFlags.firstKnowledge) {
-game.storyFlags.firstKnowledge = true;
-addStoryLog("Ein erster Funke der Erinnerung kehrt zurück. Du beginnst zu verstehen.");
-}
-}
-function addStoryLog(text, highlight = false) {
+function addStoryLog(text) {
 const log = document.getElementById('story-log');
 const entry = document.createElement('div');
+entry.className = 'log-new';
 entry.textContent = "> " + text;
-if (highlight) entry.classList.add('log-highlight');
 log.prepend(entry);
 }
-/* --- UI & TABS --- */
-function updateUI() {
-document.getElementById('res-energy').textContent = game.energy;
-document.getElementById('res-max-energy').textContent = game.maxEnergy;
-document.getElementById('res-knowledge').textContent = game.knowledge;
-document.getElementById('prog-meditate').style.width =
-(game.activeAction === 'meditate' ? game.progress * 100 : 0) + '%';
-document.getElementById('prog-rest').style.width =
-(game.activeAction === 'rest' ? game.progress * 100 : 0) + '%';
-document.getElementById('btn-meditate').disabled = !canStartAction('meditate') && game.activeAction !== 'meditate';
-document.getElementById('btn-rest').disabled = !canStartAction('rest') && game.activeAction !== 'rest';
-const mind = game.upgrades.mind;
-document.getElementById('lvl-mind').textContent = mind.level;
-document.getElementById('cost-mind').textContent = mind.cost + " Wissen";
-document.getElementById('upg-mind').disabled = game.knowledge < mind.cost;
+/* =================================================================
+5. DYNAMISCHE OBERFLÄCHE (UI RENDERING)
+================================================================= */
+function formatResMap(resMap, prefix = "") {
+return Object.entries(resMap).map(([key, val]) => {
+const name = RESOURCE_CONFIG[key] ? RESOURCE_CONFIG[key].name : key;
+return ${prefix}${val} ${name};
+}).join(", ");
+}
+function renderUI() {
+// 1. Obere Ressourcen-Leiste neu zeichnen
+const resBar = document.getElementById('resource-bar');
+resBar.innerHTML = "";
+for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
+const resState = state.resources[key];
+if (!resState.unlocked) continue;
+const div = document.createElement('div');
+div.className = 'res-box';
+const maxText = cfg.hasMax ? /${resState.max} : "";
+div.innerHTML = ${cfg.name}: <span>${resState.current}${maxText}</span>;
+resBar.appendChild(div);
+}
+// 2. Aktions-Buttons neu zeichnen
+const actContainer = document.getElementById('actions-container');
+actContainer.innerHTML = "";
+for (const action of ACTION_CONFIG) {
+if (action.condition && !action.condition(state)) continue;
+const affordable = canAfford(action.cost);
+const customOk = action.customCanRun ? action.customCanRun(state) : true;
+const costText = Object.keys(action.cost).length > 0 ? Kosten: ${formatResMap(action.cost)} : "Kostenlos";
+const rewardText = formatResMap(action.reward, "+");
+const btn = document.createElement('button');
+btn.className = 'action-btn';
+btn.disabled = !(affordable && customOk);
+btn.onclick = () => executeAction(action.id);
+btn.innerHTML = <div class="btn-header"> <span>${action.name}</span> <span class="btn-reward">${rewardText}</span> </div> <div class="btn-desc">${action.desc}<br><strong>${costText}</strong></div>;
+actContainer.appendChild(btn);
+}
+// 3. Upgrade-Buttons neu zeichnen
+const upgContainer = document.getElementById('upgrades-container');
+upgContainer.innerHTML = "";
+for (const upg of UPGRADE_CONFIG) {
+if (upg.condition && !upg.condition(state)) continue;
+const upgState = state.upgrades[upg.id];
+const isMaxed = upg.maxLevel && upgState.level >= upg.maxLevel;
+const currentCost = getUpgradeCost(upg, upgState.level);
+const affordable = !isMaxed && canAfford(currentCost);
+const btn = document.createElement('button');
+btn.className = 'action-btn';
+btn.disabled = !affordable;
+btn.onclick = () => buyUpgrade(upg.id);
+btn.innerHTML = <div class="btn-header"> <span>${upg.name} (Stufe ${upgState.level})</span> <span>${isMaxed ? "MAX" : formatResMap(currentCost)}</span> </div> <div class="btn-desc">${upg.desc}</div>;
+upgContainer.appendChild(btn);
+}
 }
 function switchTab(tabName) {
 ['actions', 'upgrades', 'system'].forEach(t => {
@@ -440,6 +487,45 @@ document.getElementById('nav-' + t).classList.remove('active');
 document.getElementById('tab-' + tabName).classList.remove('hidden');
 document.getElementById('nav-' + tabName).classList.add('active');
 }
-// Spiel beim Start laden und UI aktualisieren
+/* =================================================================
+6. SPEICHERN & LADEN
+================================================================= */
+function saveGame(manual = false) {
+localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+if (manual) {
+document.getElementById('save-status').textContent = "Gespeichert um " + new Date().toLocaleTimeString();
+}
+}
+function loadGame() {
+initDefaultState();
+const saved = localStorage.getItem(SAVE_KEY);
+if (!saved) return;
+try {
+const parsed = JSON.parse(saved);
+// Übernimmt gespeicherte Werte sicher in die aktuelle Struktur
+for (const key of Object.keys(state.resources)) {
+if (parsed.resources && parsed.resources[key]) {
+Object.assign(state.resources[key], parsed.resources[key]);
+}
+}
+for (const key of Object.keys(state.upgrades)) {
+if (parsed.upgrades && parsed.upgrades[key]) {
+Object.assign(state.upgrades[key], parsed.upgrades[key]);
+}
+}
+if (parsed.triggeredEvents) {
+state.triggeredEvents = parsed.triggeredEvents;
+}
+} catch (e) {
+console.error("Speicherstand konnte nicht geladen werden:", e);
+}
+}
+function resetGame() {
+if (confirm("Spielstand wirklich komplett löschen?")) {
+localStorage.removeItem(SAVE_KEY);
+location.reload();
+}
+}
+// Starten
 loadGame();
-updateUI();
+renderUI();
