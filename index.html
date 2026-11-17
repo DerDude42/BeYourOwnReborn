@@ -397,8 +397,9 @@
 
         <div class="tab-panel" id="tab-training" hidden>
             <section class="card">
-                <h2 class="card-title">Training</h2>
+                <h2 class="card-title">Training & Upgrades</h2>
                 <div class="btn-list" id="training-list"></div>
+                <div class="btn-list" id="upgrade-list" style="margin-top: 12px;"></div>
             </section>
         </div>
 
@@ -418,13 +419,6 @@
             <section class="card" id="shop-card" hidden>
                 <h2 class="card-title">Shop</h2>
                 <div id="shop-items"></div>
-            </section>
-        </div>
-
-        <div class="tab-panel" id="tab-upgrades" hidden>
-            <section class="card">
-                <h2 class="card-title">Upgrades</h2>
-                <div class="btn-list" id="upgrade-list"></div>
             </section>
         </div>
 
@@ -454,7 +448,6 @@
     <nav id="tabbar">
         <button type="button" class="tab-btn active" data-tab="actions">Aktionen</button>
         <button type="button" class="tab-btn" data-tab="training">Training</button>
-        <button type="button" class="tab-btn" data-tab="upgrades">Upgrades</button>
         <button type="button" class="tab-btn" data-tab="inventory">Inventar</button>
         <button type="button" class="tab-btn" data-tab="stats">Stats</button>
     </nav>
@@ -478,7 +471,7 @@
             health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
             energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.2 }, // 1 Energie alle 5 Ticks
             money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 },
-            fame:   { name: "Ruhm",    hasMax: true,  start: 0,  max: 20, visible: () => state.resources.fame.current > 0 || usesOf("patrol") > 0 },
+            fame:   { name: "Ruhm",    hasMax: false, start: 0 }, // kein Maximum
             food:   { name: "Essen",   hasMax: true,  start: 5,  max: 20, drainPerTick: 0.05, drainFlag: "foodDrain" } // Verbrauch pro Tick, erst aktiv, wenn state.flags.foodDrain gesetzt ist
         };
 
@@ -531,7 +524,7 @@
             {
                 id: "blanket",
                 name: "Wolldecke",
-                desc: "Schlafen: +0,5 Gesundheit/Tick zusätzlich",
+                desc: "Ausruhen: +0,5 Gesundheit/Tick zusätzlich",
                 unlock: { money: 25 },
                 cost:   { money: 15 },
                 maxOwned: 1,
@@ -613,6 +606,7 @@
         const BASE_ACTION_POINTS = 1;      // so viele Aktivitäten laufen gleichzeitig
         const MEDITATION_BASE_MULT = 1.05; // Regenerations-Multiplikator der Meditation
         const MIND_UPGRADE_FACTOR = 1.10;  // "Geist trainieren": Multiplikator x1,10 pro Level
+        const MEDITATION_FLAT_REGEN = 1;  // fixe Energie pro Tick, solange Meditation läuft (zusätzlich zum Multiplikator)
         const SLEEP_ENERGY_GAIN = 0.5;     // Energie pro Tick beim Schlafen
         const FORCED_SLEEP_TICKS = 5;      // Zwangsschlaf bei 0 Gesundheit: so viele Ticks mit reduzierter Erholung
         const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
@@ -628,6 +622,7 @@
             weed:  { name: "Unkraut", desc: "Wert 0,5 Gold", maxOwned: 20, value: { money: 0.5 } },
             foxTail: { name: "Fuchsschwanz", desc: "Wert 10 Gold · als Talisman: +5 max. Gesundheit, +3 max. Energie", value: { money: 10 },
                        effects: { maxHealth: 5, maxEnergy: 3 }, slot: "talisman", category: "Talisman", manualEquip: true },
+            helm:    { name: "Helm", desc: "+10 max. Gesundheit · +0,1 Gesundheit/Tick", effects: { maxHealth: 10, healthRegen: 0.1 }, maxOwned: 1, slot: "head", category: "Kopf" },
             amulet:  { name: "Amulett", desc: "+0,2 Energie-Regeneration", effects: { energyRegen: 0.2 }, maxOwned: 1, slot: "neck", category: "Amulett" },
             herbs:   { name: "Kräuter", desc: "Wert 1 Gold", value: { money: 1 } }
         };
@@ -654,7 +649,7 @@
             if (it.slot) GEAR[id] = { id, name: it.name, desc: it.desc, slot: it.slot, category: it.category, effects: it.effects || {}, source: "loot", manual: !!it.manualEquip };
         }
 
-        /* ---- Skills (Meditation, Schlafen): 1 Tick Ausführung = 1 XP ---- */
+        /* ---- Skills (Meditation, Ausruhen): 1 Tick Ausführung = 1 XP ---- */
         const SKILL_BASE_NEED = 100;        // Ausführungen für Level 1
         const SKILL_NEED_GROWTH = 1.15;     // Bedarf steigt je Level um 15 %
         const SKILL_SPEED_PER_LEVEL = 0.005; // +0,5 % Wirkung pro Level
@@ -679,15 +674,15 @@
                 id: "meditation",
                 tab: "loop",
                 name: "Meditation",
-                desc: "Vervielfacht die Energie-Regeneration, solange sie läuft. Freigeschaltet nach Geist trainieren 5/5.",
+                desc: "Vervielfacht die Energie-Regeneration und gibt zusätzlich fix +1 Energie pro Tick. Freigeschaltet, wenn Geist trainieren Level 5 erreicht hat.",
                 visible: () => upgradeLevel("mind") >= 5,
                 skill: true,
-                info: () => `${skillText("meditation")} · Regeneration x${fmt(regenMultOf("meditation"), 3)}`
+                info: () => `${skillText("meditation")} · Regeneration x${fmt(regenMultOf("meditation"), 3)} · +${MEDITATION_FLAT_REGEN} Energie/Tick fix`
             },
             {
                 id: "sleep",
                 tab: "loop",
-                name: "Schlafen",
+                name: "Ausruhen",
                 desc: "Erholt Gesundheit und Energie.",
                 skill: true,
                 gain: () => {
@@ -708,26 +703,13 @@
                 tab: "training",
                 name: "Ganzkörpertraining",
                 desc: "Pro Level: +0,2 Angriff, +1 max. Gesundheit, +1 max. Energie.",
-                cost: { money: 5, energy: 5 },
+                cost: { money: 5 },
+                drain: { energy: 0.5 },
                 duration: 10,
                 maxUses: 5,
                 atkPerUse: 0.2,
                 levelBonus: { health: 1, energy: 1 },
-                info: () => `Level ${usesOf("fullbody")}/5 · Kosten: 5 Gold, 5 Energie · Dauer 10 Ticks`
-            },
-            {
-                id: "sparring",
-                tab: "training",
-                name: "Übungskampf",
-                desc: "Pro Abschluss: +2 max. Gesundheit. Freigeschaltet bei 20 Ruhm.",
-                visible: () => state.resources.fame.current >= 20 - 1e-9 || usesOf("sparring") > 0,
-                cost: { energy: 5 },
-                drain: { health: 0.5 },
-                duration: 10,
-                maxUses: 5,
-                noCrit: true,
-                levelBonus: { health: 2 },
-                info: () => `Level ${usesOf("sparring")}/5 · Kosten: 5 Energie · -0,5 Gesundheit/Tick · Dauer 10 Ticks`
+                info: () => `Level ${usesOf("fullbody")}/5 · Kosten: 5 Gold · -0,5 Energie/Tick · Dauer 10 Ticks`
             },
             {
                 id: "apprentice",
@@ -746,12 +728,11 @@
                 name: "Lohnarbeit",
                 desc: "Arbeiten gegen Bezahlung. Wiederholt sich, solange die Ressourcen reichen.",
                 visible: () => usesOf("apprentice") >= activityById("apprentice").maxUses,
-                cost: { energy: 2 },
-                drain: { food: 0.5 },
+                drain: { energy: 0.2, food: 0.5 },
                 duration: 10,
                 repeat: true,
                 onComplete: () => rollLoot([{ chance: 1, give: { money: 10 } }]),
-                info: () => `Kosten: 2 Energie · -0,5 Essen/Tick · Dauer 10 Ticks · Lohn: 10 Gold`
+                info: () => `-0,2 Energie/Tick · -0,5 Essen/Tick · Dauer 10 Ticks · Lohn: 10 Gold`
             },
             {
                 id: "kitchen",
@@ -781,18 +762,6 @@
                 }
             },
             {
-                id: "patrol",
-                tab: "actions",
-                name: "Patrouille",
-                desc: "Patrouilliere durch die Straßen. +1 Ruhm pro Durchgang (max. 10x).",
-                drain: { energy: 1 },
-                duration: 10,
-                maxUses: 10,
-                noCrit: true,
-                onComplete: () => rollLoot([{ chance: 1, give: { fame: 1 } }]),
-                info: () => `${usesOf("patrol")}/10 · -1 Energie/Tick · Dauer 10 Ticks · +1 Ruhm`
-            },
-            {
                 id: "stalk",
                 tab: "upgrades",
                 name: "Anpirschen",
@@ -802,7 +771,7 @@
                 duration: 10,
                 maxUses: 5,
                 bonusPerUse: { huntEnergySave: 0.1 },
-                info: () => `Level ${usesOf("stalk")}/5 · Kosten: 10 Energie über 10 Ticks · Jagen: -${fmt(usesOf("stalk") * 0.1)} Energie/Tick`
+                info: () => `Level ${usesOf("stalk")}/5 · -1 Energie/Tick über 10 Ticks · Jagen: -${fmt(usesOf("stalk") * 0.1)} Energie/Tick`
             },
             {
                 id: "house",
@@ -826,17 +795,45 @@
                 id: "lodge",
                 tab: "actions",
                 name: "Jagdhütte",
-                desc: "Kampf gegen einen verletzten Fuchs. Freigeschaltet nach 50x Jagen.",
-                visible: () => usesOf("hunt") >= 50,
+                desc: "Kampf gegen einen verletzten Fuchs. Freigeschaltet nach 30x Jagen.",
+                visible: () => usesOf("hunt") >= 30,
                 requires: { maxEnergy: 20 },
                 drain: { health: 1, energy: 2 },
                 duration: 10,
                 loot: [
+                    { chance: 1.0, give: { fame: 10 } },
                     { chance: 1.0, item: "foxTail", amount: 1 },
                     { chance: 1.0, item: "herbs",   amount: 1 }
                 ],
                 onComplete: (a, mult) => rollLoot(a.loot, mult),
-                info: () => `Benötigt 20 max. Energie (du: ${resMax("energy")}) · Dauer 10 Ticks · -1 Gesundheit/Tick · -2 Energie/Tick`
+                info: () => `Benötigt 20 max. Energie (du: ${resMax("energy")}) · Dauer 10 Ticks · -1 Gesundheit/Tick · -2 Energie/Tick · Belohnung: +10 Ruhm`
+            },
+            {
+                id: "elder",
+                tab: "training",
+                name: "Dem Dorfvorsteher vorsprechen",
+                desc: "Dein Ruhm öffnet dir die Tür. Nach 5 Besuchen schaltet er die Patrouille frei.",
+                visible: () => usesOf("lodge") >= 1,
+                drain: { energy: 1 },
+                duration: 20,
+                maxUses: 5,
+                info: () => `Level ${usesOf("elder")}/5 · -1 Energie/Tick (20 Energie je Besuch) · Dauer 20 Ticks`
+            },
+            {
+                id: "patrol",
+                tab: "loop",
+                name: "Patrouille",
+                desc: "Dreht eine Runde durchs Dorf. Freigeschaltet nach 5 Besuchen beim Dorfvorsteher. Wiederholt sich, solange die Ressourcen reichen.",
+                visible: () => usesOf("elder") >= activityById("elder").maxUses,
+                drain: { health: 0.5, energy: 1, food: 0.1 },
+                duration: 10,
+                repeat: true,
+                onComplete: () => rollLoot([
+                    { chance: 1, give: { fame: 1 } },
+                    { chance: 1, give: { money: 10 } },
+                    { chance: 0.2, item: "helm", amount: 1 }
+                ]),
+                info: () => `-0,5 Gesundheit/Tick · -1 Energie/Tick · -0,1 Essen/Tick · Dauer 10 Ticks · +1 Ruhm, +10 Gold, 20 % Helm`
             },
             {
                 id: "wearTail",
@@ -861,7 +858,7 @@
                 name: "Fuchsschwanz vergraben",
                 desc: "Bei Vollmond unter einem Baumstamm vergraben – beim Graben findest du etwas.",
                 visible: () => !!state.flags.foxTailFound,
-                cost: { energy: 10 },
+                drain: { energy: 1 },
                 duration: 10,
                 maxUses: 1,
                 noCrit: true,
@@ -871,7 +868,7 @@
                     state.loot.foxTail -= 1;
                     return "Beim Graben gefunden: " + rollLoot([{ chance: 1, item: "amulet" }]);
                 },
-                info: () => `Kosten: 10 Energie · Dauer 10 Ticks · verbraucht 1 Fuchsschwanz · einmalig`
+                info: () => `-1 Energie/Tick · Dauer 10 Ticks · verbraucht 1 Fuchsschwanz · einmalig`
             }
         ];
 
@@ -895,16 +892,17 @@
             { label: "Gesundheit",           get: () => `${Math.floor(state.resources.health.current + 1e-9)}/${resMax("health")}` },
             { label: "Aktionspunkte",        get: () => `${state.active.length}/${apTotal()} belegt` },
             { label: "Energie",              get: () => `${Math.floor(state.resources.energy.current + 1e-9)}/${resMax("energy")}` },
-            { label: "Energie-Regeneration", get: () => `${fmt(regenOf("energy") * regenMult())}/Tick` },
+            { label: "Gesundheits-Regeneration", get: () => `${fmt(regenOf("health"))}/Tick` },
+            { label: "Energie-Regeneration", get: () => `${fmt(regenOf("energy") * regenMult() + regenFlat())}/Tick` },
             { label: "Gold",                 get: () => `${Math.floor(state.resources.money.current + 1e-9)}/${resMax("money")}` },
             { label: "Meditations-Multiplikator", get: () => `x${fmt(regenMultOf("meditation"), 3)}` },
             { label: "Meditation (Skill)",   get: () => skillText("meditation") },
-            { label: "Schlafen (Skill)",     get: () => skillText("sleep") },
+            { label: "Ausruhen (Skill)",     get: () => skillText("sleep") },
             { label: "Ganzkörper-Level",     get: () => `${usesOf("fullbody")}/${activityById("fullbody").maxUses}` },
+            { label: "Dorfvorsteher",       get: () => `${usesOf("elder")}/${activityById("elder").maxUses}` },
             { label: "Lehre",                get: () => `${usesOf("apprentice")}/${activityById("apprentice").maxUses}` },
             { label: "Angriff",              get: () => `${fmt(atk())}` },
             { label: "Essen",                get: () => `${Math.floor(state.resources.food.current + 1e-9)}/${resMax("food")}` + (passiveDrainOf("food") > 0 ? ` (-${fmt(passiveDrainOf("food"))}/Tick)` : "") },
-            { label: "Ruhm",                 get: () => `${Math.floor(state.resources.fame.current + 1e-9)}/${resMax("fame")}` },
             { label: "Crit-Chance",          get: () => `${fmt(critChance() * 100, 0)} % (Ergebnis x${CRIT_MULT})` }
         ];
         for (const [id, it] of Object.entries(LOOT_ITEMS)) {
@@ -932,7 +930,6 @@
             state.uses = {};       // Aktivität-ID -> Anzahl Abschlüsse
             state.runTicks = {};   // bisher gelaufene Ticks zeitbegrenzter Aktionen (nicht gespeichert)
             state.lastResult = {}; // letztes Ergebnis/Beute je Aktivität (nicht gespeichert)
-            state.resumeLoop = null; // Loop, die nach dem Ausruhen (Schlafen) bei voller Energie weiterläuft (nicht gespeichert)
             state.loot = {};       // Beute-Items: ID -> Anzahl
             state.flags = {};      // freigeschaltete Schalter (siehe FLAGS)
             state.equipped = {};   // Slot -> ausgerüstete Item-ID
@@ -1021,7 +1018,7 @@
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 if (regenOf(key) > 0) {
                     const res = state.resources[key];
-                    res.current = clampRes(key, res.current + regenOf(key) * ticks * mult);
+                    res.current = clampRes(key, res.current + regenOf(key) * ticks * (key === "energy" ? mult : 1));
                 }
             }
         }
@@ -1048,6 +1045,7 @@
         // Ein Spiel-Tick: Regeneration + alle laufenden Aktivitäten
         function gameTick() {
             regenerate(1, regenMult());
+            if (regenFlat() > 0) state.resources.energy.current = clampRes("energy", state.resources.energy.current + regenFlat());
             // Passiver Verbrauch (z. B. Nahrung), bis die Ressource leer ist
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 const passive = passiveDrainOf(key);
@@ -1060,7 +1058,6 @@
                 if (activity) runActivity(activity);
             }
             if (state.resources.health.current <= 1e-9 && !isActive("sleep")) forceSleep();
-            checkResumeLoop();
         }
 
         function executeAction(actionId) {
@@ -1082,7 +1079,6 @@
             }
 
             for (const other of [...state.active]) stopActivity(other); // Betteln beendet z. B. die Meditation
-            state.resumeLoop = null;
             for (const [resKey, amount] of Object.entries(cost)) {
                 state.resources[resKey].current -= amount;
             }
@@ -1329,6 +1325,7 @@
         }
 
         function regenMultOf(id) { return meditationMult() * skillSpeed(id); }
+        function regenFlat() { return isActive("meditation") ? MEDITATION_FLAT_REGEN : 0; }
         function regenMult() {
             return isActive("meditation") ? regenMultOf("meditation") : 1;
         }
@@ -1340,16 +1337,13 @@
 
         // Gesundheit bei 0: Schlafen wird erzwungen (alles andere wird beendet)
         function forceSleep() {
-            state.resumeLoop = null;
             state.active = ["sleep"];
-            state.runTicks = {};
             state.forcedSleepTicks = FORCED_SLEEP_TICKS;
-            setStatus("Erschöpft! Du fällst in einen Zwangsschlaf.");
+            setStatus("Erschöpft! Du musst dich zwangsweise ausruhen.");
         }
 
         function stopActivity(id) {
-            state.active = state.active.filter(x => x !== id);
-            delete state.runTicks[id];
+            state.active = state.active.filter(x => x !== id); // Fortschritt (runTicks) bleibt bis zum Abschluss erhalten
             if (id === "sleep") state.forcedSleepTicks = 0;
         }
 
@@ -1384,13 +1378,11 @@
             return !requirementProblem(a);
         }
 
-        // Bedarf zum Start: Einmalkosten + Verbrauch (bei Aktionen mit Dauer für alle Ticks)
+        // Bedarf zum Start: Einmalkosten + Verbrauch des ersten Ticks (der Rest wird tickweise bezahlt)
         function startNeeds(a) {
-            const need = { ...(a.cost || {}) };
-            const ticks = a.duration || 1;
+            const need = (state.runTicks[a.id] || 0) > 0 ? {} : { ...(a.cost || {}) }; // Einmalkosten nur beim frischen Start
             for (const [key, perTick] of Object.entries(drainOf(a))) {
-                const passive = passiveDrainOf(key); // läuft parallel weiter
-                need[key] = (need[key] || 0) + (perTick + passive) * ticks;
+                need[key] = (need[key] || 0) + perTick + passiveDrainOf(key);
             }
             return need;
         }
@@ -1482,7 +1474,9 @@
         function activityInfo(a) {
             let text = a.info();
             if (critEligible(a)) text += ` · Crit ${fmt(critChance() * 100, 0)} %`;
-            if (a.duration && isActive(a.id)) text += ` · ${state.runTicks[a.id] || 0}/${a.duration} Ticks`;
+            if (a.duration && (state.runTicks[a.id] || 0) > 0) text += ` · ${state.runTicks[a.id]}/${a.duration} Ticks`;
+            const lacking = isActive(a.id) ? pausedBy(a) : null;
+            if (lacking) text += ` · ⏸ pausiert: ${RESOURCE_CONFIG[lacking].name} fehlt`;
             if (state.lastResult[a.id]) text += ` · Zuletzt: ${state.lastResult[a.id]}`;
             return text;
         }
@@ -1492,7 +1486,6 @@
             const activity = activityById(id);
             if (!activity) return;
             tick();
-            state.resumeLoop = null; // manuelles Eingreifen beendet das automatische Fortsetzen
             if (isActive(id)) {
                 stopActivity(id);
             } else if (isMaxedActivity(activity)) {
@@ -1509,56 +1502,30 @@
 
         // Bezahlt die Einmalkosten, bricht alle anderen laufenden Aktivitäten ab und startet diese
         function beginActivity(activity) {
-            for (const [key, amount] of Object.entries(activity.cost || {})) {
-                state.resources[key].current -= amount;
+            if (!(state.runTicks[activity.id] > 0)) {
+                for (const [key, amount] of Object.entries(activity.cost || {})) {
+                    state.resources[key].current -= amount;
+                }
             }
             for (const other of [...state.active]) stopActivity(other);
-            state.runTicks[activity.id] = 0;
+            state.runTicks[activity.id] = state.runTicks[activity.id] || 0;
             state.active.push(activity.id);
         }
 
-        // Loop-Aktion stoppt wegen Energiemangel: Schlafen starten und die Loop bei voller Energie fortsetzen.
-        // Fehlt außer Energie noch etwas anderes (z. B. Essen), bringt Ausruhen nichts – dann nur stoppen.
-        function restAndResume(activity, needs) {
-            if (activity.tab !== "loop" || activity.skill) return false;
-            const energyShort = (needs.energy || 0) > state.resources.energy.current + 1e-9;
-            if (!energyShort) return false;
-            for (const [key, amount] of Object.entries(needs)) {
-                if (key !== "energy" && state.resources[key].current < amount - 1e-9) return false;
-            }
-            const sleep = activityById("sleep");
-            if (!sleep || !isVisible(sleep)) return false;
-            stopActivity(activity.id);
-            beginActivity(sleep);
-            state.resumeLoop = activity.id;
-            setStatus(`Keine Energie mehr – du ruhst dich aus. ${activity.name} geht bei voller Energie weiter.`);
-            return true;
-        }
-
-        // Nach dem Ausruhen: bei voller Energie die gemerkte Loop-Aktion wieder starten
-        function checkResumeLoop() {
-            if (!state.resumeLoop) return;
-            if (!isActive("sleep")) { state.resumeLoop = null; return; }
-            const energy = state.resources.energy;
-            if (energy.current < resMax("energy") - 1e-9) return;
-            const activity = activityById(state.resumeLoop);
-            state.resumeLoop = null;
-            if (activity && isVisible(activity) && !isMaxedActivity(activity) && meetsRequirements(activity) && canAfford(startNeeds(activity))) {
-                beginActivity(activity);
-                setStatus(`Energie voll – ${activity.name} läuft weiter.`);
-            }
-        }
-
         // Ein Tick einer Aktivität: nur ausführbar, wenn der volle Verbrauch bezahlbar ist, sonst Stopp
+        // Liefert die Ressource, die für den nächsten Tick fehlt (Gesundheit zählt nicht: sie darf auf 0 fallen), sonst null
+        function pausedBy(activity) {
+            for (const [key, perTick] of Object.entries(drainOf(activity))) {
+                if (key !== "health" && state.resources[key].current < perTick - 1e-9) return key;
+            }
+            return null;
+        }
+
+        // Ein Tick einer Aktivität: fehlt Ressource, pausiert sie (Fortschritt bleibt), sonst läuft sie weiter
         function runActivity(activity) {
             if (activity.problem && activity.problem()) { stopActivity(activity.id); return; }
+            if (pausedBy(activity)) return;
             const drain = drainOf(activity);
-            for (const [key, perTick] of Object.entries(drain)) {
-                if (state.resources[key].current < perTick - 1e-9) {
-                    if (!restAndResume(activity, drain)) stopActivity(activity.id);
-                    return;
-                }
-            }
             for (const [key, perTick] of Object.entries(drain)) {
                 state.resources[key].current = Math.max(0, state.resources[key].current - perTick);
             }
@@ -1589,10 +1556,10 @@
             }
             state.lastResult[activity.id] = text;
             checkUnlocks();
+            delete state.runTicks[activity.id];
             stopActivity(activity.id);
-            if (activity.repeat && !isMaxedActivity(activity) && meetsRequirements(activity)) {
-                if (canAfford(startNeeds(activity))) beginActivity(activity);
-                else restAndResume(activity, startNeeds(activity));
+            if (activity.repeat && !isMaxedActivity(activity) && meetsRequirements(activity) && canAfford(startNeeds(activity))) {
+                beginActivity(activity);
             }
         }
 
@@ -1724,9 +1691,6 @@
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 const current = Math.floor(state.resources[key].current + 1e-9);
                 setText(ui.res[key], cfg.hasMax ? `${current}/${resMax(key)}` : `${current}`);
-                const box = ui.res[key].parentElement;
-                const show = !cfg.visible || cfg.visible();
-                if (box.hidden === show) box.hidden = !show;
             }
             for (const action of ACTION_CONFIG) {
                 const btn = ui.buttons[action.id];
@@ -1933,14 +1897,15 @@
 
                 const running = isActive(a.id);
                 const maxed = isMaxedActivity(a);
-                setText(c.right, maxed ? "Abgeschlossen" : (running ? "● Läuft" : "Start"));
+                const progressed = a.duration && (state.runTicks[a.id] || 0) > 0;
+                setText(c.right, maxed ? "Abgeschlossen" : (running ? (pausedBy(a) ? "⏸ Pause" : "● Läuft") : (progressed ? "Fortsetzen" : "Start")));
                 setText(c.extra, activityInfo(a));
                 c.btn.classList.toggle('running', running);
                 let pct = 0;
                 if (a.skill) {
                     const sk = skillOf(a.id);
                     pct = sk.xp / skillNeed(sk.level) * 100;
-                } else if (a.duration && running) {
+                } else if (a.duration) {
                     pct = Math.min(100, (state.runTicks[a.id] || 0) / a.duration * 100);
                 }
                 const w = pct.toFixed(1) + '%';
