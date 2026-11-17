@@ -1,17 +1,15 @@
-tml
 <!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Chronicle Engine</title>
+    <title>Chronicle Minimal</title>
     <style>
         :root {
             --bg-color: #121214;
             --card-bg: #1e1e24;
             --accent: #4e89ae;
             --success: #4ea870;
-            --danger: #a84a4a;
             --text-main: #e1e1e6;
             --text-muted: #9a9aa2;
             --border: #2c2c35;
@@ -42,18 +40,22 @@ tml
             padding-bottom: env(safe-area-inset-bottom);
         }
 
-        /* --- DYNAMISCHE RESSOURCEN-LEISTE OBEN --- */
+        /* --- OBERE LEISTE: RESSOURCEN & UHR --- */
         header {
             background-color: var(--card-bg);
-            padding: 14px 12px;
+            padding: 14px 16px;
             border-bottom: 1px solid var(--border);
             display: flex;
-            flex-wrap: wrap;
-            justify-content: space-around;
-            gap: 10px;
+            justify-content: space-between;
+            align-items: center;
             font-size: 1rem;
             font-weight: bold;
             flex-shrink: 0;
+        }
+
+        .res-group {
+            display: flex;
+            gap: 10px;
         }
 
         .res-box {
@@ -67,6 +69,12 @@ tml
             color: var(--accent);
         }
 
+        #clock-display {
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums; /* Verhindert Wackeln der Zahlen */
+            font-size: 0.95rem;
+        }
+
         /* --- HAUPTBEREICH --- */
         main {
             flex: 1;
@@ -75,7 +83,6 @@ tml
             display: flex;
             flex-direction: column;
             gap: 16px;
-            -webkit-overflow-scrolling: touch;
         }
 
         .card {
@@ -85,32 +92,7 @@ tml
             padding: 16px;
         }
 
-        h2 {
-            font-size: 0.9rem;
-            margin-bottom: 12px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        /* --- STORY LOG --- */
-        #story-log {
-            max-height: 120px;
-            overflow-y: auto;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            color: #d0d0d8;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .log-new {
-            color: var(--accent);
-            font-weight: 500;
-        }
-
-        /* --- TOUCH-BUTTONS --- */
+        /* --- BUTTONS --- */
         .action-btn {
             width: 100%;
             background-color: #272730;
@@ -138,13 +120,6 @@ tml
             cursor: not-allowed;
         }
 
-        .danger-btn {
-            background-color: rgba(168, 74, 74, 0.2);
-            border-color: var(--danger);
-            text-align: center;
-            font-weight: bold;
-        }
-
         .btn-header {
             display: flex;
             justify-content: space-between;
@@ -164,368 +139,174 @@ tml
             margin-top: 6px;
         }
 
-        /* --- UNTERE NAVIGATION --- */
-        nav {
-            background-color: var(--card-bg);
-            border-top: 1px solid var(--border);
-            display: flex;
-            flex-shrink: 0;
-        }
-
-        .nav-btn {
-            flex: 1;
-            padding: 18px 8px;
-            background: none;
-            border: none;
+        /* --- DEZENTE STATUS-ZEILE UNTEN --- */
+        footer {
+            padding: 10px 16px;
+            text-align: center;
+            font-size: 0.8rem;
             color: var(--text-muted);
-            font-weight: bold;
-            font-size: 0.95rem;
-        }
-
-        .nav-btn.active {
-            color: var(--accent);
-            border-top: 3px solid var(--accent);
-            background-color: rgba(78, 137, 174, 0.08);
-        }
-
-        .hidden {
-            display: none;
+            flex-shrink: 0;
         }
     </style>
 </head>
 <body>
 
-    <!-- WIRD AUTOMATISCH AUS DEN RESSOURCEN GENERIERT -->
-    <header id="resource-bar"></header>
+    <header>
+        <div class="res-group" id="resource-bar"></div>
+        <div id="clock-display">00:00:00</div>
+    </header>
 
     <main>
-        <section class="card">
-            <h2>Chronik</h2>
-            <div id="story-log">
-                <div>Du erwachst in einer dunklen Kammer. Dein Geist ist noch benebelt.</div>
-            </div>
-        </section>
-
-        <!-- TAB 1: DYNAMISCHE AKTIONEN -->
-        <section id="tab-actions" class="card">
-            <h2>Aktionen</h2>
-            <div id="actions-container"></div>
-        </section>
-
-        <!-- TAB 2: DYNAMISCHE UPGRADES -->
-        <section id="tab-upgrades" class="card hidden">
-            <h2>Erkenntnisse</h2>
-            <div id="upgrades-container"></div>
-        </section>
-
-        <!-- TAB 3: SYSTEM -->
-        <section id="tab-system" class="card hidden">
-            <h2>System</h2>
-            <button class="action-btn" onclick="saveGame(true)">
-                <div class="btn-header"><span>Spielstand speichern</span></div>
-                <div class="btn-desc" id="save-status">Speichert automatisch bei jeder Aktion</div>
-            </button>
-
-            <button class="action-btn danger-btn" onclick="resetGame()">
-                Spielstand komplett zurücksetzen
-            </button>
-        </section>
+        <section class="card" id="actions-container"></section>
     </main>
 
-    <nav>
-        <button class="nav-btn active" id="nav-actions" onclick="switchTab('actions')">Aktionen</button>
-        <button class="nav-btn" id="nav-upgrades" onclick="switchTab('upgrades')">Upgrades</button>
-        <button class="nav-btn" id="nav-system" onclick="switchTab('system')">System</button>
-    </nav>
+    <footer id="save-status">Autosave aktiv (alle 10 Sek.)</footer>
 
     <script>
         /* =================================================================
-           1. SPIEL-DATEN (HIER EINFACH NEUE INHALTE HINZUFÜGEN!)
+           1. KONFIGURATION (EINFACH ERWEITERBAR)
            ================================================================= */
-        
-        // Definition aller Ressourcen
         const RESOURCE_CONFIG = {
-            energy:    { name: "Energie", hasMax: true,  start: 10, max: 10, unlocked: true },
-            knowledge: { name: "Wissen",  hasMax: false, start: 0,  max: 0,  unlocked: true },
-            mana:      { name: "Mana",    hasMax: true,  start: 0,  max: 5,  unlocked: false } // Schaltet sich später frei!
+            energy: { name: "Energie", hasMax: true,  start: 10, max: 10 },
+            money:  { name: "Geld",    hasMax: false, start: 0,  max: 0  }
         };
 
-        // Definition aller klickbaren Aktionen
         const ACTION_CONFIG = [
             {
-                id: "meditate",
-                name: "Meditieren",
-                desc: "Sammle deine Gedanken in der Stille.",
+                id: "beg",
+                name: "Betteln",
+                desc: "Bitte Passanten um eine kleine Münze.",
                 cost:   { energy: 2 },
-                reward: { knowledge: 1 },
-                condition: () => true // Immer sichtbar
-            },
-            {
-                id: "rest",
-                name: "Ausruhen",
-                desc: "Schließe die Augen und schöpfe neue Kraft.",
-                cost:   {},
-                reward: { energy: 5 },
-                condition: () => true,
-                // Spezialregel: Nur klickbar, wenn Energie nicht voll ist
-                customCanRun: (state) => state.resources.energy.current < state.resources.energy.max
-            },
-            {
-                id: "explore_room",
-                name: "Kammer absuchen",
-                desc: "Tastend untersuchst du die kalten Steinwände.",
-                cost:   { energy: 4 },
-                reward: { knowledge: 3 },
-                condition: (state) => state.resources.knowledge.current >= 3 // Erscheint erst ab 3 Wissen!
-            },
-            {
-                id: "channel_mana",
-                name: "Arkane Energie kanalisieren",
-                desc: "Wandle tiefes Wissen in reine Magie um.",
-                cost:   { energy: 3, knowledge: 2 },
-                reward: { mana: 1 },
-                condition: (state) => state.resources.mana.unlocked // Erscheint erst, wenn Mana freigeschaltet ist!
+                reward: { money: 1 }
             }
         ];
 
-        // Definition aller Upgrades
-        const UPGRADE_CONFIG = [
-            {
-                id: "expand_mind",
-                name: "Geist erweitern",
-                desc: "Erhöht deine maximale Energie dauerhaft um +5.",
-                baseCost: { knowledge: 5 },
-                costMultiplier: 1.5,
-                condition: () => true,
-                onBuy: (state) => {
-                    state.resources.energy.max += 5;
-                    addStoryLog("Dein Geist fühlt sich weiter an. Maximale Energie erhöht!");
+        /* =================================================================
+           2. SPIELZUSTAND
+           ================================================================= */
+        const SAVE_KEY = "chronicle_minimal_v1";
+        let state = { resources: {} };
+
+        function initDefaultState() {
+            state.resources = {};
+            for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
+                state.resources[key] = {
+                    current: cfg.start,
+                    max: cfg.max
+                };
+            }
+        }
+
+        /* =================================================================
+           3. SPIELLOGIK
+           ================================================================= */
+        function canAfford(costObj) {
+            for (const [resKey, amount] of Object.entries(costObj)) {
+                if (!state.resources[resKey] || state.resources[resKey].current < amount) {
+                    return false;
                 }
-            },
-            {
-                id: "awaken_magic",
-                name: "Magisches Gespür wecken",
-                desc: "Schaltet die Ressource Mana und neue Aktionen frei.",
-                baseCost: { knowledge: 10 },
-                costMultiplier: 2.0,
-                maxLevel: 1, // Kann nur 1x gekauft werden
-                condition: (state) => state.resources.knowledge.current >= 5,
-                onBuy: (state) => {
-                    state.resources.mana.unlocked = true;
-                    addStoryLog("Ein Kribbeln durchfährt deine Finger. Du spürst nun Mana!");
-                }
-                }
-];
-/* =================================================================
-2. SPIELZUSTAND & INITIALISIERUNG
-================================================================= */
-const SAVE_KEY = "chronicle_modular_v1";
-let state = {
-resources: {},
-upgrades: {},
-triggeredEvents: {}
-};
-function initDefaultState() {
-state.resources = {};
-for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
-state.resources[key] = {
-current: cfg.start,
-max: cfg.max,
-unlocked: cfg.unlocked
-};
-}
-state.upgrades = {};
-for (const upg of UPGRADE_CONFIG) {
-state.upgrades[upg.id] = { level: 0 };
-}
-state.triggeredEvents = {};
-}
-/* =================================================================
-3. KERNLOGIK (KLICKS, KOSTEN, BELOHNUNGEN)
-================================================================= */
-// Prüft, ob genug Ressourcen für eine Kostenliste vorhanden sind
-function canAfford(costObj) {
-for (const [resKey, amount] of Object.entries(costObj)) {
-if (!state.resources[resKey] || state.resources[resKey].current < amount) {
-return false;
-}
-}
-return true;
-}
-// Zieht Kosten ab
-function payCost(costObj) {
-for (const [resKey, amount] of Object.entries(costObj)) {
-state.resources[resKey].current -= amount;
-}
-}
-// Schreibt Belohnungen gut (achtet auf Maximum!)
-function giveReward(rewardObj) {
-for (const [resKey, amount] of Object.entries(rewardObj)) {
-const res = state.resources[resKey];
-const cfg = RESOURCE_CONFIG[resKey];
-res.unlocked = true; // Schaltet Ressource automatisch sichtbar, falls man sie erhält
-if (cfg.hasMax) {
-res.current = Math.min(res.max, res.current + amount);
-} else {
-res.current += amount;
-}
-}
-}
-// Wird bei jedem Klick auf eine Aktion ausgeführt
-function executeAction(actionId) {
-const action = ACTION_CONFIG.find(a => a.id === actionId);
-if (!action) return;
-if (!canAfford(action.cost)) return;
-if (action.customCanRun && !action.customCanRun(state)) return;
-payCost(action.cost);
-giveReward(action.reward);
-checkStoryTriggers();
-saveGame();
-renderUI();
-}
-// Wird bei jedem Klick auf ein Upgrade ausgeführt
-function buyUpgrade(upgId) {
-const upg = UPGRADE_CONFIG.find(u => u.id === upgId);
-const upgState = state.upgrades[upgId];
-if (!upg) return;
-if (upg.maxLevel && upgState.level >= upg.maxLevel) return;
-const currentCost = getUpgradeCost(upg, upgState.level);
-if (!canAfford(currentCost)) return;
-payCost(currentCost);
-upgState.level += 1;
-if (upg.onBuy) upg.onBuy(state);
-saveGame();
-renderUI();
-}
-function getUpgradeCost(upg, level) {
-const cost = {};
-for (const [resKey, baseAmount] of Object.entries(upg.baseCost)) {
-cost[resKey] = Math.floor(baseAmount * Math.pow(upg.costMultiplier, level));
-}
-return cost;
-}
-/* =================================================================
-4. STORY-EVENTS & LOG
-================================================================= */
-function checkStoryTriggers() {
-if (state.resources.knowledge.current >= 1 && !state.triggeredEvents.firstMeditation) {
-state.triggeredEvents.firstMeditation = true;
-addStoryLog("Deine Gedanken klären sich. Du bemerkst, dass du deine Umgebung untersuchen kannst.");
-}
-if (state.resources.knowledge.current >= 3 && !state.triggeredEvents.unlockedExplore) {
-state.triggeredEvents.unlockedExplore = true;
-addStoryLog("Neue Aktion freigeschaltet: Kammer absuchen!");
-}
-}
-function addStoryLog(text) {
-const log = document.getElementById('story-log');
-const entry = document.createElement('div');
-entry.className = 'log-new';
-entry.textContent = "> " + text;
-log.prepend(entry);
-}
-/* =================================================================
-5. DYNAMISCHE OBERFLÄCHE (UI RENDERING)
-================================================================= */
-function formatResMap(resMap, prefix = "") {
-return Object.entries(resMap).map(([key, val]) => {
-const name = RESOURCE_CONFIG[key] ? RESOURCE_CONFIG[key].name : key;
-return ${prefix}${val} ${name};
-}).join(", ");
-}
-function renderUI() {
-// 1. Obere Ressourcen-Leiste neu zeichnen
-const resBar = document.getElementById('resource-bar');
-resBar.innerHTML = "";
-for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
-const resState = state.resources[key];
-if (!resState.unlocked) continue;
-const div = document.createElement('div');
-div.className = 'res-box';
-const maxText = cfg.hasMax ? /${resState.max} : "";
-div.innerHTML = ${cfg.name}: <span>${resState.current}${maxText}</span>;
-resBar.appendChild(div);
-}
-// 2. Aktions-Buttons neu zeichnen
-const actContainer = document.getElementById('actions-container');
-actContainer.innerHTML = "";
-for (const action of ACTION_CONFIG) {
-if (action.condition && !action.condition(state)) continue;
-const affordable = canAfford(action.cost);
-const customOk = action.customCanRun ? action.customCanRun(state) : true;
-const costText = Object.keys(action.cost).length > 0 ? Kosten: ${formatResMap(action.cost)} : "Kostenlos";
-const rewardText = formatResMap(action.reward, "+");
-const btn = document.createElement('button');
-btn.className = 'action-btn';
-btn.disabled = !(affordable && customOk);
-btn.onclick = () => executeAction(action.id);
-btn.innerHTML = <div class="btn-header"> <span>${action.name}</span> <span class="btn-reward">${rewardText}</span> </div> <div class="btn-desc">${action.desc}<br><strong>${costText}</strong></div>;
-actContainer.appendChild(btn);
-}
-// 3. Upgrade-Buttons neu zeichnen
-const upgContainer = document.getElementById('upgrades-container');
-upgContainer.innerHTML = "";
-for (const upg of UPGRADE_CONFIG) {
-if (upg.condition && !upg.condition(state)) continue;
-const upgState = state.upgrades[upg.id];
-const isMaxed = upg.maxLevel && upgState.level >= upg.maxLevel;
-const currentCost = getUpgradeCost(upg, upgState.level);
-const affordable = !isMaxed && canAfford(currentCost);
-const btn = document.createElement('button');
-btn.className = 'action-btn';
-btn.disabled = !affordable;
-btn.onclick = () => buyUpgrade(upg.id);
-btn.innerHTML = <div class="btn-header"> <span>${upg.name} (Stufe ${upgState.level})</span> <span>${isMaxed ? "MAX" : formatResMap(currentCost)}</span> </div> <div class="btn-desc">${upg.desc}</div>;
-upgContainer.appendChild(btn);
-}
-}
-function switchTab(tabName) {
-['actions', 'upgrades', 'system'].forEach(t => {
-document.getElementById('tab-' + t).classList.add('hidden');
-document.getElementById('nav-' + t).classList.remove('active');
-});
-document.getElementById('tab-' + tabName).classList.remove('hidden');
-document.getElementById('nav-' + tabName).classList.add('active');
-}
-/* =================================================================
-6. SPEICHERN & LADEN
-================================================================= */
-function saveGame(manual = false) {
-localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-if (manual) {
-document.getElementById('save-status').textContent = "Gespeichert um " + new Date().toLocaleTimeString();
-}
-}
-function loadGame() {
-initDefaultState();
-const saved = localStorage.getItem(SAVE_KEY);
-if (!saved) return;
-try {
-const parsed = JSON.parse(saved);
-// Übernimmt gespeicherte Werte sicher in die aktuelle Struktur
-for (const key of Object.keys(state.resources)) {
-if (parsed.resources && parsed.resources[key]) {
+            }
+            return true;
+        }
+
+        function executeAction(actionId) {
+            const action = ACTION_CONFIG.find(a => a.id === actionId);
+            if (!action || !canAfford(action.cost)) return;
+
+            // Kosten abziehen
+            for (const [resKey, amount] of Object.entries(action.cost)) {
+                state.resources[resKey].current -= amount;
+            }
+
+            // Belohnung gutschreiben
+            for (const [resKey, amount] of Object.entries(action.reward)) {
+                const res = state.resources[resKey];
+                const cfg = RESOURCE_CONFIG[resKey];
+                res.current = cfg.hasMax ? Math.min(res.max, res.current + amount) : res.current + amount;
+            }
+
+            renderUI();
+        }
+
+        /* =================================================================
+           4. UI & UHR
+           ================================================================= */
+        function formatResMap(resMap, prefix = "") {
+            return Object.entries(resMap).map(([key, val]) => {
+                const name = RESOURCE_CONFIG[key] ? RESOURCE_CONFIG[key].name : key;
+                return `${prefix}${val} ${name}`;
+            }).join(", ");
+        }
+
+        function renderUI() {
+            // Ressourcen-Anzeige oben
+            const resBar = document.getElementById('resource-bar');
+            resBar.innerHTML = "";
+            for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
+                const resState = state.resources[key];
+                const div = document.createElement('div');
+                div.className = 'res-box';
+                const maxText = cfg.hasMax ? `/${resState.max}` : "";
+                div.innerHTML = `${cfg.name}: <span>${resState.current}${maxText}</span>`;
+                resBar.appendChild(div);
+            }
+
+            // Aktions-Buttons
+            const actContainer = document.getElementById('actions-container');
+            actContainer.innerHTML = "";
+            for (const action of ACTION_CONFIG) {
+                const affordable = canAfford(action.cost);
+                const costText = Object.keys(action.cost).length > 0 ? `Kosten: ${formatResMap(action.cost)}` : "Kostenlos";
+                const rewardText = formatResMap(action.reward, "+");
+
+                const btn = document.createElement('button');
+                btn.className = 'action-btn';
+                btn.disabled = !affordable;
+                btn.onclick = () => executeAction(action.id);
+                btn.innerHTML = `
+                    <div class="btn-header">
+                        <span>${action.name}</span>
+                        <span class="btn-reward">${rewardText}</span>
+                    </div>
+                    <div class="btn-desc">${action.desc}<br><strong>${costText}</strong></div>
+                `;
+                actContainer.appendChild(btn);
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock-display').textContent = now.toLocaleTimeString('de-DE');
+        }
+
+        /* =================================================================
+           5. SPEICHERN & LADEN (AUTOSAVE ALLE 10 SEKUNDEN)
+           ================================================================= */
+        function saveGame() {
+            localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+            const timeStr = new Date().toLocaleTimeString('de-DE');
+            document.getElementById('save-status').textContent = `Zuletzt gespeichert: ${timeStr}`;
+        }
+
+        function loadGame() {
+            initDefaultState();
+            const saved = localStorage.getItem(SAVE_KEY);
+            if (!saved) return;
+            try {
+                const parsed = JSON.parse(saved);
+                for (const key of Object.keys(state.resources)) {
+                    if (parsed.resources && parsed.resources[key]) {
 Object.assign(state.resources[key], parsed.resources[key]);
 }
-}
-for (const key of Object.keys(state.upgrades)) {
-if (parsed.upgrades && parsed.upgrades[key]) {
-Object.assign(state.upgrades[key], parsed.upgrades[key]);
-}
-}
-if (parsed.triggeredEvents) {
-state.triggeredEvents = parsed.triggeredEvents;
 }
 } catch (e) {
 console.error("Speicherstand konnte nicht geladen werden:", e);
 }
 }
-function resetGame() {
-if (confirm("Spielstand wirklich komplett löschen?")) {
-localStorage.removeItem(SAVE_KEY);
-location.reload();
-}
-}
-// Starten
+// Start-Initialisierung
 loadGame();
 renderUI();
+updateClock();
+// Intervalle starten
+setInterval(updateClock, 1000);   // Uhr jede Sekunde aktualisieren
+setInterval(saveGame, 10000);     // Autosave alle 10 Sekunden (10.000 ms)
