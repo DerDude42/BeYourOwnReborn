@@ -315,6 +315,7 @@
             health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
             energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.2 }, // 1 Energie alle 5 Ticks
             money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 }
+            Food:  { name: "Essen",    hasMax: true,  start: 5,  max: 20 }
         };
 
         const ACTION_CONFIG = [
@@ -363,6 +364,15 @@
                 id: "blanket",
                 name: "Wolldecke",
                 desc: "Schlafen: +0,5 Gesundheit/Tick zusätzlich",
+                unlock: { money: 25 },
+                cost:   { money: 15 },
+                maxOwned: 1,
+                effects: { sleepBonus: 0.5 }
+            },
+              {
+                id: "shirt",
+                name: "T-Shirt",
+                desc: "wärmt und schützt beim jagen vor Kratzern: -0,2 Gesundheit/Tick weniger beim jagen",
                 unlock: { money: 25 },
                 cost:   { money: 15 },
                 maxOwned: 1,
