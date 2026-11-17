@@ -471,7 +471,7 @@
             health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
             energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.2 }, // 1 Energie alle 5 Ticks
             money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 },
-            fame:   { name: "Ruhm",    hasMax: false, start: 0 }, // kein Maximum
+            fame:   { name: "Ruhm",    hasMax: true,  start: 0, max: 20, visible: () => state.resources.fame.current > 0 || usesOf("lodge") > 0 || usesOf("patrol") > 0 }, // wird erst angezeigt, wenn Ruhm vorhanden ist
             food:   { name: "Essen",   hasMax: true,  start: 5,  max: 20, drainPerTick: 0.05, drainFlag: "foodDrain" } // Verbrauch pro Tick, erst aktiv, wenn state.flags.foodDrain gesetzt ist
         };
 
@@ -712,6 +712,19 @@
                 info: () => `Level ${usesOf("fullbody")}/5 · Kosten: 5 Gold · -0,5 Energie/Tick · Dauer 10 Ticks`
             },
             {
+                id: "sparring",
+                tab: "training",
+                name: "Übungskampf",
+                desc: "Pro Abschluss: +2 max. Gesundheit. Freigeschaltet bei 20 Ruhm.",
+                visible: () => state.resources.fame.current >= 20 - 1e-9 || usesOf("sparring") > 0,
+                drain: { health: 0.5, energy: 0.5 },
+                duration: 10,
+                maxUses: 5,
+                noCrit: true,
+                levelBonus: { health: 2 },
+                info: () => `Level ${usesOf("sparring")}/5 · -0,5 Gesundheit/Tick · -0,5 Energie/Tick (5 Energie je Kampf) · Dauer 10 Ticks`
+            },
+            {
                 id: "apprentice",
                 tab: "training",
                 name: "Lehre",
@@ -899,6 +912,8 @@
             { label: "Meditation (Skill)",   get: () => skillText("meditation") },
             { label: "Ausruhen (Skill)",     get: () => skillText("sleep") },
             { label: "Ganzkörper-Level",     get: () => `${usesOf("fullbody")}/${activityById("fullbody").maxUses}` },
+            { label: "Ruhm",                 get: () => `${Math.floor(state.resources.fame.current + 1e-9)}/${resMax("fame")}` },
+            { label: "Übungskampf",          get: () => `${usesOf("sparring")}/${activityById("sparring").maxUses}` },
             { label: "Dorfvorsteher",       get: () => `${usesOf("elder")}/${activityById("elder").maxUses}` },
             { label: "Lehre",                get: () => `${usesOf("apprentice")}/${activityById("apprentice").maxUses}` },
             { label: "Angriff",              get: () => `${fmt(atk())}` },
@@ -1592,7 +1607,7 @@
            4. UI & UHR
            (Elemente werden einmal gebaut und danach nur noch aktualisiert)
            ================================================================= */
-        const ui = { res: {}, buttons: {}, rewardSpans: {} };
+        const ui = { res: {}, resBox: {}, buttons: {}, rewardSpans: {} };
 
         function formatResMap(resMap, prefix = "") {
             return Object.entries(resMap || {}).map(([key, val]) => {
@@ -1617,6 +1632,7 @@
                 box.appendChild(valueSpan);
                 resBar.appendChild(box);
                 ui.res[key] = valueSpan;
+                ui.resBox[key] = box;
             }
 
             // Aktions-Buttons
@@ -1690,6 +1706,7 @@
         function updateUI() {
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 const current = Math.floor(state.resources[key].current + 1e-9);
+                if (cfg.visible) { const show = !!cfg.visible(); if (ui.resBox[key].hidden === show) ui.resBox[key].hidden = !show; }
                 setText(ui.res[key], cfg.hasMax ? `${current}/${resMax(key)}` : `${current}`);
             }
             for (const action of ACTION_CONFIG) {
