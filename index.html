@@ -223,6 +223,9 @@
             color: var(--text-muted);
         }
 
+        .res-group { flex-wrap: wrap; gap: 6px; }
+        .res-box { padding: 5px 9px; font-size: 0.85rem; }
+
         /* --- DEZENTE STATUS-ZEILE UNTEN --- */
         footer {
             padding: 10px 16px;
@@ -295,8 +298,9 @@
            regenPerSec: Regeneration pro Sekunde (optional, nur sinnvoll mit hasMax)
            ================================================================= */
         const RESOURCE_CONFIG = {
-            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerSec: 1 }, // 1 Energie / 5 Sek.
-            money:  { name: "Gold",    hasMax: false, start: 0,  max: 0 }
+            health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
+            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerSec: 0.2 }, // 1 Energie / 5 Sek.
+            money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 }
         };
 
         const ACTION_CONFIG = [
@@ -305,42 +309,55 @@
                 name: "Betteln",
                 desc: "Bitte Passanten um eine kleine Münze.",
                 cost:   { energy: 2 },
-                reward: { money: 1 }
+                reward: { money: 1 },
+                bonus:  { money: "begBonus" } // zusätzlich itemBonus("begBonus")
             }
         ];
 
         // unlock: Gold-Stand, ab dem der Gegenstand im Shop erscheint (bleibt danach dauerhaft sichtbar)
         // maxOwned: maximale Anzahl, die man besitzen kann (null = unbegrenzt)
+        // effects: dauerhafte Boni, die mit itemBonus(name) abgefragt werden
         const ITEM_CONFIG = [
             {
-                id: "stick",
-                name: "Stock",
-                desc: "Ein stabiler Ast. Besser als nichts.",
+                id: "purse",
+                name: "Geldbörse",
+                desc: "+30 max. Gold",
                 unlock: { money: 10 },
                 cost:   { money: 5 },
-                maxOwned: 1
+                maxOwned: 1,
+                effects: { maxMoney: 30 }
             },
             {
-                id: "arrow",
-                name: "Pfeil",
-                desc: "Spitz und gerade.",
+                id: "pants",
+                name: "Zerrissene Hose",
+                desc: "+1 Gold beim Betteln",
+                unlock: { money: 15 },
+                cost:   { money: 10 },
+                maxOwned: 1,
+                effects: { begBonus: 1 }
+            },
+            {
+                id: "woodstaff",
+                name: "Holzstab",
+                desc: "+1 Angriff",
                 unlock: { money: 20 },
-                cost:   { money: 2 },
-                maxOwned: null
+                cost:   { money: 10 },
+                maxOwned: 1,
+                effects: { atk: 1 }
             },
             {
-                id: "bow",
-                name: "Bogen",
-                desc: "Ohne Pfeile nutzlos.",
-                unlock: { money: 30 },
-                cost:   { money: 20 },
-                maxOwned: 1
+                id: "blanket",
+                name: "Wolldecke",
+                desc: "Schlafen: +0,5 Gesundheit/Sek. zusätzlich",
+                unlock: { money: 25 },
+                cost:   { money: 15 },
+                maxOwned: 1,
+                effects: { sleepBonus: 0.5 }
             }
         ];
 
         /* ---- Grundwerte ---- */
         const BASE_ACTION_POINTS = 1;      // so viele Aktivitäten laufen gleichzeitig
-        const BASE_HEALTH = 10;            // + 1 pro Ganzkörper-Level
         const MEDITATION_BASE_MULT = 1.05; // Regenerations-Multiplikator der Meditation
         const MIND_UPGRADE_FACTOR = 1.10;  // "Geist trainieren": Multiplikator x1,10 pro Level
 
@@ -348,6 +365,8 @@
 
         // Aktivitäten laufen, bis man sie stoppt (belegen 1 Aktionspunkt)
         // tab: "loop" | "training"; drain: Verbrauch pro Sekunde; xpPerSec/xpPerLevel: Trainingsfortschritt
+        // gain: Zuwachs pro Sekunde (Funktion); levelBonus: pro Level +X auf das Maximum der Ressource
+        // huntChance: Chance pro Sekunde auf 1x Essen
         const ACTIVITY_CONFIG = [
             {
                 id: "meditation",
@@ -357,17 +376,35 @@
                 info: () => `Regeneration x${fmt(meditationMult(), 3)}`
             },
             {
+                id: "sleep",
+                tab: "loop",
+                name: "Schlafen",
+                desc: "Erholt die Gesundheit.",
+                gain: () => ({ health: 1 + itemBonus("sleepBonus") }),
+                info: () => `+${fmt(1 + itemBonus("sleepBonus"))} Gesundheit/Sek.`
+            },
+            {
                 id: "fullbody",
                 tab: "training",
                 name: "Ganzkörpertraining",
-                desc: "Kostet Energie, stärkt den ganzen Körper.",
+                desc: "Jedes Level: +1 max. Gesundheit und +1 max. Energie.",
                 drain: { energy: 0.5 },
                 xpPerSec: 1,
                 xpPerLevel: 20,
+                levelBonus: { health: 1, energy: 1 },
                 info: () => {
                     const p = state.progress.fullbody;
                     return `Level ${p.level} · ${Math.floor(p.xp)}/20 XP · -0,5 Energie/Sek.`;
                 }
+            },
+            {
+                id: "hunt",
+                tab: "training",
+                name: "Jagen",
+                desc: "Mit 20 % Chance pro Sekunde gibt es Essen.",
+                drain: { health: 1, energy: 1 },
+                huntChance: 0.2,
+                info: () => `-1 Gesundheit/Sek. · -1 Energie/Sek. · Essen: ${state.food}`
             }
         ];
 
@@ -385,13 +422,15 @@
 
         // Stats-Liste: einfach weitere Einträge ergänzen
         const STAT_CONFIG = [
-            { label: "Gesundheit",           get: () => `${maxHealth()}/${maxHealth()}` },
+            { label: "Gesundheit",           get: () => `${Math.floor(state.resources.health.current + 1e-9)}/${resMax("health")}` },
             { label: "Aktionspunkte",        get: () => `${state.active.length}/${apTotal()} belegt` },
-            { label: "Energie",              get: () => `${Math.floor(state.resources.energy.current + 1e-9)}/${RESOURCE_CONFIG.energy.max}` },
+            { label: "Energie",              get: () => `${Math.floor(state.resources.energy.current + 1e-9)}/${resMax("energy")}` },
             { label: "Energie-Regeneration", get: () => `${fmt(RESOURCE_CONFIG.energy.regenPerSec * regenMult())}/Sek.` },
-            { label: "Gold",                 get: () => `${Math.floor(state.resources.money.current + 1e-9)}` },
+            { label: "Gold",                 get: () => `${Math.floor(state.resources.money.current + 1e-9)}/${resMax("money")}` },
             { label: "Meditations-Multiplikator", get: () => `x${fmt(meditationMult(), 3)}` },
-            { label: "Ganzkörper-Level",     get: () => `${state.progress.fullbody.level}` }
+            { label: "Ganzkörper-Level",     get: () => `${state.progress.fullbody.level}` },
+            { label: "Angriff",              get: () => `${itemBonus("atk")}` },
+            { label: "Essen",                get: () => `${state.food}` }
         ];
 
         /* =================================================================
@@ -412,6 +451,8 @@
             state.active = [];     // laufende Aktivitäten (wird nicht gespeichert)
             state.upgrades = {};   // Upgrade-ID -> Level
             state.progress = {};   // Aktivität-ID -> { level, xp }
+            state.food = 0;        // Beute vom Jagen
+            state.timers = {};     // Sekunden-Zähler für Drops (nicht gespeichert)
             for (const u of UPGRADE_CONFIG) state.upgrades[u.id] = 0;
             for (const a of ACTIVITY_CONFIG) {
                 if (a.xpPerLevel) state.progress[a.id] = { level: 0, xp: 0 };
@@ -424,7 +465,7 @@
         function clampRes(key, value) {
             const cfg = RESOURCE_CONFIG[key];
             const v = Math.max(0, value);
-            return cfg.hasMax ? Math.min(cfg.max, v) : v;
+            return cfg.hasMax ? Math.min(resMax(key), v) : v;
         }
 
         /* =================================================================
@@ -469,7 +510,7 @@
 
             tick(); // Regeneration bis jetzt berücksichtigen
             const cost = action.cost || {};
-            const reward = action.reward || {};
+            const reward = rewardOf(action);
 
             if (!canAfford(cost)) { updateUI(); return; }
 
@@ -528,12 +569,47 @@
             saveGame();
         }
 
+        /* ---- Boni & dynamische Maxima ---- */
+        function itemBonus(name) {
+            let total = 0;
+            for (const item of ITEM_CONFIG) {
+                total += ownedCount(item) * ((item.effects && item.effects[name]) || 0);
+            }
+            return total;
+        }
+
+        function resMax(key) {
+            const cfg = RESOURCE_CONFIG[key];
+            if (!cfg.hasMax) return Infinity;
+            let max = cfg.max;
+            for (const a of ACTIVITY_CONFIG) {
+                if (a.levelBonus && a.levelBonus[key]) max += state.progress[a.id].level * a.levelBonus[key];
+            }
+            if (key === "money") max += itemBonus("maxMoney");
+            return max;
+        }
+
+        function clampAll() {
+            for (const key of Object.keys(RESOURCE_CONFIG)) {
+                state.resources[key].current = clampRes(key, state.resources[key].current);
+            }
+        }
+
+        function rewardOf(action) {
+            const out = {};
+            for (const [key, amount] of Object.entries(action.reward || {})) {
+                const bonusName = action.bonus && action.bonus[key];
+                out[key] = amount + (bonusName ? itemBonus(bonusName) : 0);
+            }
+            return out;
+        }
+
         /* ---- Aktivitäten (Loop & Training) ---- */
         function activityById(id) { return ACTIVITY_CONFIG.find(a => a.id === id); }
         function isActive(id) { return state.active.includes(id); }
         function apTotal() { return BASE_ACTION_POINTS; }
         function upgradeLevel(id) { return state.upgrades[id] || 0; }
-        function maxHealth() { return BASE_HEALTH + state.progress.fullbody.level; }
+        function maxHealth() { return resMax("health"); }
 
         function meditationMult() {
             return MEDITATION_BASE_MULT * Math.pow(MIND_UPGRADE_FACTOR, upgradeLevel("mind"));
@@ -547,19 +623,24 @@
             state.active = state.active.filter(x => x !== id);
         }
 
+        // Loop und Training sind immer klickbar: Starten beendet die jeweils andere Gruppe
         function toggleActivity(id) {
             const activity = activityById(id);
             if (!activity) return;
             tick();
             if (isActive(id)) {
                 stopActivity(id);
-            } else if (state.active.length < apTotal() && canAfford(activity.drain || {})) {
+            } else if (!canAfford(activity.drain || {})) {
+                setStatus("Nicht genug Ressourcen für " + activity.name);
+            } else {
+                state.active = state.active.filter(x => activityById(x).tab === activity.tab);
+                while (state.active.length >= apTotal()) state.active.shift();
                 state.active.push(id);
             }
             updateUI();
         }
 
-        // Verbrauch & Fortschritt für dt Sekunden; stoppt automatisch, wenn die Ressource leer ist
+        // Verbrauch, Zuwachs & Fortschritt für dt Sekunden; stoppt automatisch, wenn eine Ressource leer ist
         function runActivity(activity, dt) {
             let secs = dt;
             for (const [key, perSec] of Object.entries(activity.drain || {})) {
@@ -569,12 +650,23 @@
                 for (const [key, perSec] of Object.entries(activity.drain || {})) {
                     state.resources[key].current = Math.max(0, state.resources[key].current - perSec * secs);
                 }
+                const gain = activity.gain ? activity.gain() : {};
+                for (const [key, perSec] of Object.entries(gain)) {
+                    state.resources[key].current = clampRes(key, state.resources[key].current + perSec * secs);
+                }
                 if (activity.xpPerSec) {
                     const p = state.progress[activity.id];
                     p.xp += activity.xpPerSec * secs;
                     while (p.xp >= activity.xpPerLevel) {
                         p.xp -= activity.xpPerLevel;
                         p.level++;
+                    }
+                }
+                if (activity.huntChance) {
+                    state.timers[activity.id] = (state.timers[activity.id] || 0) + secs;
+                    while (state.timers[activity.id] >= 1) {
+                        state.timers[activity.id] -= 1;
+                        if (Math.random() < activity.huntChance) state.food++;
                     }
                 }
             }
@@ -609,7 +701,7 @@
            4. UI & UHR
            (Elemente werden einmal gebaut und danach nur noch aktualisiert)
            ================================================================= */
-        const ui = { res: {}, buttons: {} };
+        const ui = { res: {}, buttons: {}, rewardSpans: {} };
 
         function formatResMap(resMap, prefix = "") {
             return Object.entries(resMap || {}).map(([key, val]) => {
@@ -655,6 +747,7 @@
                 const rewardSpan = document.createElement('span');
                 rewardSpan.className = 'btn-reward';
                 rewardSpan.textContent = formatResMap(action.reward, "+");
+                ui.rewardSpans[action.id] = rewardSpan;
                 header.append(nameSpan, rewardSpan);
 
                 const desc = document.createElement('div');
@@ -706,12 +799,16 @@
         function updateUI() {
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 const current = Math.floor(state.resources[key].current + 1e-9);
-                setText(ui.res[key], cfg.hasMax ? `${current}/${cfg.max}` : `${current}`);
+                setText(ui.res[key], cfg.hasMax ? `${current}/${resMax(key)}` : `${current}`);
             }
             for (const action of ACTION_CONFIG) {
                 const btn = ui.buttons[action.id];
                 const disabled = !canAfford(action.cost);
                 if (btn.disabled !== disabled) btn.disabled = disabled;
+            }
+
+            for (const action of ACTION_CONFIG) {
+                setText(ui.rewardSpans[action.id], formatResMap(rewardOf(action), "+"));
             }
 
             // Shop
@@ -803,8 +900,6 @@
                 setText(c.right, running ? "● Läuft" : "Start");
                 setText(c.extra, a.info());
                 c.btn.classList.toggle('running', running);
-                const disabled = !running && (state.active.length >= apTotal() || !canAfford(a.drain || {}));
-                if (c.btn.disabled !== disabled) c.btn.disabled = disabled;
             }
 
             for (const u of UPGRADE_CONFIG) {
@@ -851,7 +946,8 @@
                 unlocked: [...state.unlocked],
                 inventory: { ...state.inventory },
                 upgrades: { ...state.upgrades },
-                progress: JSON.parse(JSON.stringify(state.progress))
+                progress: JSON.parse(JSON.stringify(state.progress)),
+                food: state.food
             };
             for (const key of Object.keys(RESOURCE_CONFIG)) {
                 payload.resources[key] = { current: state.resources[key].current };
@@ -877,7 +973,7 @@
                     ? parsed.resources[key].current
                     : undefined;
                 if (typeof saved === 'number' && Number.isFinite(saved)) {
-                    state.resources[key].current = clampRes(key, saved);
+                    state.resources[key].current = Math.max(0, saved); // Klemmen erst am Ende (Maxima hängen von Level/Items ab)
                 }
             }
 
@@ -896,11 +992,6 @@
                 }
             }
 
-            // Offline-Fortschritt: Regeneration für die Zeit seit dem letzten Speichern
-            if (typeof parsed.lastSaved === 'number' && Number.isFinite(parsed.lastSaved)) {
-                regenerate(Math.max(0, (Date.now() - parsed.lastSaved) / 1000));
-            }
-
             // Upgrades & Trainingsfortschritt (nur bekannte IDs, nur gültige Zahlen)
             if (parsed.upgrades && typeof parsed.upgrades === 'object') {
                 for (const u of UPGRADE_CONFIG) {
@@ -916,6 +1007,15 @@
                         state.progress[a.id] = { level: q.level, xp: Math.min(q.xp, a.xpPerLevel) };
                     }
                 }
+            }
+
+            if (Number.isInteger(parsed.food) && parsed.food >= 0) state.food = parsed.food;
+
+            clampAll();
+
+            // Offline-Fortschritt: Regeneration für die Zeit seit dem letzten Speichern
+            if (typeof parsed.lastSaved === 'number' && Number.isFinite(parsed.lastSaved)) {
+                regenerate(Math.max(0, (Date.now() - parsed.lastSaved) / 1000));
             }
 
             checkUnlocks();
