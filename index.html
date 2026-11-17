@@ -903,6 +903,7 @@
             state.uses = {};       // Aktivität-ID -> Anzahl Abschlüsse
             state.runTicks = {};   // bisher gelaufene Ticks zeitbegrenzter Aktionen (nicht gespeichert)
             state.lastResult = {}; // letztes Ergebnis/Beute je Aktivität (nicht gespeichert)
+            state.resumeLoop = null; // Loop, die nach dem Ausruhen (Schlafen) bei voller Energie weiterläuft (nicht gespeichert)
             state.loot = {};       // Beute-Items: ID -> Anzahl
             state.flags = {};      // freigeschaltete Schalter (siehe FLAGS)
             state.equipped = {};   // Slot -> ausgerüstete Item-ID
@@ -1030,6 +1031,7 @@
                 if (activity) runActivity(activity);
             }
             if (state.resources.health.current <= 1e-9 && !isActive("sleep")) forceSleep();
+            checkResumeLoop();
         }
 
         function executeAction(actionId) {
@@ -1051,6 +1053,7 @@
             }
 
             for (const other of [...state.active]) stopActivity(other); // Betteln beendet z. B. die Meditation
+            state.resumeLoop = null;
             for (const [resKey, amount] of Object.entries(cost)) {
                 state.resources[resKey].current -= amount;
             }
@@ -1308,6 +1311,7 @@
 
         // Gesundheit bei 0: Schlafen wird erzwungen (alles andere wird beendet)
         function forceSleep() {
+            state.resumeLoop = null;
             state.active = ["sleep"];
             state.runTicks = {};
             state.forcedSleepTicks = FORCED_SLEEP_TICKS;
@@ -1459,6 +1463,7 @@
             const activity = activityById(id);
             if (!activity) return;
             tick();
+            state.resumeLoop = null; // manuelles Eingreifen beendet das automatische Fortsetzen
             if (isActive(id)) {
                 stopActivity(id);
             } else if (isMaxedActivity(activity)) {
@@ -1483,13 +1488,45 @@
             state.active.push(activity.id);
         }
 
+        // Loop-Aktion stoppt wegen Energiemangel: Schlafen starten und die Loop bei voller Energie fortsetzen.
+        // Fehlt außer Energie noch etwas anderes (z. B. Essen), bringt Ausruhen nichts – dann nur stoppen.
+        function restAndResume(activity, needs) {
+            if (activity.tab !== "loop" || activity.skill) return false;
+            const energyShort = (needs.energy || 0) > state.resources.energy.current + 1e-9;
+            if (!energyShort) return false;
+            for (const [key, amount] of Object.entries(needs)) {
+                if (key !== "energy" && state.resources[key].current < amount - 1e-9) return false;
+            }
+            const sleep = activityById("sleep");
+            if (!sleep || !isVisible(sleep)) return false;
+            stopActivity(activity.id);
+            beginActivity(sleep);
+            state.resumeLoop = activity.id;
+            setStatus(`Keine Energie mehr – du ruhst dich aus. ${activity.name} geht bei voller Energie weiter.`);
+            return true;
+        }
+
+        // Nach dem Ausruhen: bei voller Energie die gemerkte Loop-Aktion wieder starten
+        function checkResumeLoop() {
+            if (!state.resumeLoop) return;
+            if (!isActive("sleep")) { state.resumeLoop = null; return; }
+            const energy = state.resources.energy;
+            if (energy.current < resMax("energy") - 1e-9) return;
+            const activity = activityById(state.resumeLoop);
+            state.resumeLoop = null;
+            if (activity && isVisible(activity) && !isMaxedActivity(activity) && meetsRequirements(activity) && canAfford(startNeeds(activity))) {
+                beginActivity(activity);
+                setStatus(`Energie voll – ${activity.name} läuft weiter.`);
+            }
+        }
+
         // Ein Tick einer Aktivität: nur ausführbar, wenn der volle Verbrauch bezahlbar ist, sonst Stopp
         function runActivity(activity) {
             if (activity.problem && activity.problem()) { stopActivity(activity.id); return; }
             const drain = drainOf(activity);
             for (const [key, perTick] of Object.entries(drain)) {
                 if (state.resources[key].current < perTick - 1e-9) {
-                    stopActivity(activity.id);
+                    if (!restAndResume(activity, drain)) stopActivity(activity.id);
                     return;
                 }
             }
@@ -1524,8 +1561,9 @@
             state.lastResult[activity.id] = text;
             checkUnlocks();
             stopActivity(activity.id);
-            if (activity.repeat && !isMaxedActivity(activity) && meetsRequirements(activity) && canAfford(startNeeds(activity))) {
-                beginActivity(activity);
+            if (activity.repeat && !isMaxedActivity(activity) && meetsRequirements(activity)) {
+                if (canAfford(startNeeds(activity))) beginActivity(activity);
+                else restAndResume(activity, startNeeds(activity));
             }
         }
 
