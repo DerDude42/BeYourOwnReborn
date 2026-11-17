@@ -71,7 +71,7 @@
 
         #clock-display {
             color: var(--text-muted);
-            font-variant-numeric: tabular-nums; /* Verhindert Wackeln der Zahlen */
+            font-variant-numeric: tabular-nums;
             font-size: 0.95rem;
         }
 
@@ -90,10 +90,12 @@
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 16px;
+            flex-shrink: 0; /* verhindert Zusammendrücken im Flex-Container */
         }
 
         /* --- BUTTONS --- */
         .action-btn {
+            display: block;
             width: 100%;
             background-color: #272730;
             border: 1px solid var(--border);
@@ -139,6 +141,11 @@
             margin-top: 6px;
         }
 
+        .btn-cost {
+            display: block;
+            font-weight: bold;
+        }
+
         /* --- DEZENTE STATUS-ZEILE UNTEN --- */
         footer {
             padding: 10px 16px;
@@ -160,15 +167,16 @@
         <section class="card" id="actions-container"></section>
     </main>
 
-    <footer id="save-status">Autosave aktiv (alle 10 Sek.)</footer>
+    <footer id="save-status">Autosave aktiv</footer>
 
     <script>
         /* =================================================================
            1. KONFIGURATION (EINFACH ERWEITERBAR)
+           regenPerSec: Regeneration pro Sekunde (optional, nur sinnvoll mit hasMax)
            ================================================================= */
         const RESOURCE_CONFIG = {
-            energy: { name: "Energie", hasMax: true,  start: 10, max: 10 },
-            money:  { name: "Geld",    hasMax: false, start: 0,  max: 0  }
+            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerSec: 0.2 }, // 1 Energie / 5 Sek.
+            money:  { name: "Geld",    hasMax: false, start: 0,  max: 0 }
         };
 
         const ACTION_CONFIG = [
@@ -185,128 +193,271 @@
            2. SPIELZUSTAND
            ================================================================= */
         const SAVE_KEY = "chronicle_minimal_v1";
+        const SAVE_VERSION = 1;
+        const AUTOSAVE_MS = 10000;
+
         let state = { resources: {} };
+        let lastTick = Date.now();
+        let storageOk = true;
 
         function initDefaultState() {
             state.resources = {};
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
-                state.resources[key] = {
-                    current: cfg.start,
-                    max: cfg.max
-                };
+                state.resources[key] = { current: cfg.start };
             }
+        }
+
+        function clampRes(key, value) {
+            const cfg = RESOURCE_CONFIG[key];
+            const v = Math.max(0, value);
+            return cfg.hasMax ? Math.min(cfg.max, v) : v;
         }
 
         /* =================================================================
            3. SPIELLOGIK
            ================================================================= */
         function canAfford(costObj) {
-            for (const [resKey, amount] of Object.entries(costObj)) {
-                if (!state.resources[resKey] || state.resources[resKey].current < amount) {
-                    return false;
-                }
+            for (const [resKey, amount] of Object.entries(costObj || {})) {
+                const res = state.resources[resKey];
+                if (!res || res.current < amount) return false;
             }
             return true;
         }
 
+        // Regeneration für eine vergangene Zeitspanne (Sekunden) anwenden
+        function regenerate(seconds) {
+            if (!(seconds > 0)) return;
+            for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
+                if (cfg.regenPerSec > 0) {
+                    const res = state.resources[key];
+                    res.current = clampRes(key, res.current + cfg.regenPerSec * seconds);
+                }
+            }
+        }
+
+        // Zeitbasiert statt zählerbasiert: bleibt korrekt, auch wenn der Tab gedrosselt wird
+        function tick() {
+            const now = Date.now();
+            regenerate(Math.max(0, (now - lastTick) / 1000));
+            lastTick = now;
+        }
+
         function executeAction(actionId) {
             const action = ACTION_CONFIG.find(a => a.id === actionId);
-            if (!action || !canAfford(action.cost)) return;
+            if (!action) return;
 
-            // Kosten abziehen
-            for (const [resKey, amount] of Object.entries(action.cost)) {
+            tick(); // Regeneration bis jetzt berücksichtigen
+            const cost = action.cost || {};
+            const reward = action.reward || {};
+
+            if (!canAfford(cost)) { updateUI(); return; }
+
+            // Konfigurationsfehler abfangen, bevor etwas abgezogen wird
+            for (const resKey of Object.keys(reward)) {
+                if (!state.resources[resKey]) {
+                    console.error(`Aktion "${action.id}": unbekannte Belohnungs-Ressource "${resKey}"`);
+                    return;
+                }
+            }
+
+            for (const [resKey, amount] of Object.entries(cost)) {
                 state.resources[resKey].current -= amount;
             }
-
-            // Belohnung gutschreiben
-            for (const [resKey, amount] of Object.entries(action.reward)) {
+            for (const [resKey, amount] of Object.entries(reward)) {
                 const res = state.resources[resKey];
-                const cfg = RESOURCE_CONFIG[resKey];
-                res.current = cfg.hasMax ? Math.min(res.max, res.current + amount) : res.current + amount;
+                res.current = clampRes(resKey, res.current + amount);
             }
 
-            renderUI();
+            updateUI();
+            saveGame(); // sofort speichern, nicht erst beim nächsten Intervall
         }
 
         /* =================================================================
            4. UI & UHR
+           (Elemente werden einmal gebaut und danach nur noch aktualisiert)
            ================================================================= */
+        const ui = { res: {}, buttons: {} };
+
         function formatResMap(resMap, prefix = "") {
-            return Object.entries(resMap).map(([key, val]) => {
+            return Object.entries(resMap || {}).map(([key, val]) => {
                 const name = RESOURCE_CONFIG[key] ? RESOURCE_CONFIG[key].name : key;
                 return `${prefix}${val} ${name}`;
             }).join(", ");
         }
 
-        function renderUI() {
+        function setText(el, text) {
+            if (el.textContent !== text) el.textContent = text;
+        }
+
+        function buildUI() {
             // Ressourcen-Anzeige oben
             const resBar = document.getElementById('resource-bar');
-            resBar.innerHTML = "";
+            resBar.textContent = "";
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
-                const resState = state.resources[key];
-                const div = document.createElement('div');
-                div.className = 'res-box';
-                const maxText = cfg.hasMax ? `/${resState.max}` : "";
-                div.innerHTML = `${cfg.name}: <span>${resState.current}${maxText}</span>`;
-                resBar.appendChild(div);
+                const box = document.createElement('div');
+                box.className = 'res-box';
+                box.appendChild(document.createTextNode(`${cfg.name}: `));
+                const valueSpan = document.createElement('span');
+                box.appendChild(valueSpan);
+                resBar.appendChild(box);
+                ui.res[key] = valueSpan;
             }
 
             // Aktions-Buttons
             const actContainer = document.getElementById('actions-container');
-            actContainer.innerHTML = "";
+            actContainer.textContent = "";
             for (const action of ACTION_CONFIG) {
-                const affordable = canAfford(action.cost);
-                const costText = Object.keys(action.cost).length > 0 ? `Kosten: ${formatResMap(action.cost)}` : "Kostenlos";
-                const rewardText = formatResMap(action.reward, "+");
+                const costKeys = Object.keys(action.cost || {});
+                const costText = costKeys.length > 0 ? `Kosten: ${formatResMap(action.cost)}` : "Kostenlos";
 
                 const btn = document.createElement('button');
                 btn.className = 'action-btn';
-                btn.disabled = !affordable;
-                btn.onclick = () => executeAction(action.id);
-                btn.innerHTML = `
-                    <div class="btn-header">
-                        <span>${action.name}</span>
-                        <span class="btn-reward">${rewardText}</span>
-                    </div>
-                    <div class="btn-desc">${action.desc}<br><strong>${costText}</strong></div>
-                `;
+                btn.type = 'button';
+                btn.addEventListener('click', () => executeAction(action.id));
+
+                const header = document.createElement('div');
+                header.className = 'btn-header';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = action.name;
+                const rewardSpan = document.createElement('span');
+                rewardSpan.className = 'btn-reward';
+                rewardSpan.textContent = formatResMap(action.reward, "+");
+                header.append(nameSpan, rewardSpan);
+
+                const desc = document.createElement('div');
+                desc.className = 'btn-desc';
+                desc.appendChild(document.createTextNode(action.desc));
+                const costSpan = document.createElement('span');
+                costSpan.className = 'btn-cost';
+                costSpan.textContent = costText;
+                desc.appendChild(costSpan);
+
+                btn.append(header, desc);
                 actContainer.appendChild(btn);
+                ui.buttons[action.id] = btn;
+            }
+        }
+
+        function updateUI() {
+            for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
+                const current = Math.floor(state.resources[key].current + 1e-9);
+                setText(ui.res[key], cfg.hasMax ? `${current}/${cfg.max}` : `${current}`);
+            }
+            for (const action of ACTION_CONFIG) {
+                const btn = ui.buttons[action.id];
+                const disabled = !canAfford(action.cost);
+                if (btn.disabled !== disabled) btn.disabled = disabled;
             }
         }
 
         function updateClock() {
-            const now = new Date();
-            document.getElementById('clock-display').textContent = now.toLocaleTimeString('de-DE');
+            document.getElementById('clock-display').textContent = new Date().toLocaleTimeString('de-DE');
+        }
+
+        function setStatus(text) {
+            document.getElementById('save-status').textContent = text;
         }
 
         /* =================================================================
-           5. SPEICHERN & LADEN (AUTOSAVE ALLE 10 SEKUNDEN)
+           5. SPEICHERN & LADEN
            ================================================================= */
         function saveGame() {
-            localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-            const timeStr = new Date().toLocaleTimeString('de-DE');
-            document.getElementById('save-status').textContent = `Zuletzt gespeichert: ${timeStr}`;
+            tick();
+            const payload = {
+                version: SAVE_VERSION,
+                lastSaved: Date.now(),
+                resources: {}
+            };
+            for (const key of Object.keys(RESOURCE_CONFIG)) {
+                payload.resources[key] = { current: state.resources[key].current };
+            }
+
+            try {
+                localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+                storageOk = true;
+                setStatus(`Zuletzt gespeichert: ${new Date().toLocaleTimeString('de-DE')}`);
+            } catch (e) {
+                storageOk = false;
+                console.error("Speichern fehlgeschlagen:", e);
+                setStatus("⚠ Speichern nicht möglich (Browser-Speicher gesperrt oder voll)");
+            }
+        }
+
+        // Übernimmt nur validierte Werte; max kommt immer aus der aktuellen Konfiguration
+        function applySave(parsed) {
+            if (!parsed || typeof parsed !== 'object') return;
+
+            for (const key of Object.keys(RESOURCE_CONFIG)) {
+                const saved = parsed.resources && parsed.resources[key]
+                    ? parsed.resources[key].current
+                    : undefined;
+                if (typeof saved === 'number' && Number.isFinite(saved)) {
+                    state.resources[key].current = clampRes(key, saved);
+                }
+            }
+
+            // Offline-Fortschritt: Regeneration für die Zeit seit dem letzten Speichern
+            if (typeof parsed.lastSaved === 'number' && Number.isFinite(parsed.lastSaved)) {
+                regenerate(Math.max(0, (Date.now() - parsed.lastSaved) / 1000));
+            }
         }
 
         function loadGame() {
             initDefaultState();
-            const saved = localStorage.getItem(SAVE_KEY);
-            if (!saved) return;
+
+            let raw = null;
             try {
-                const parsed = JSON.parse(saved);
-                for (const key of Object.keys(state.resources)) {
-                    if (parsed.resources && parsed.resources[key]) {
-Object.assign(state.resources[key], parsed.resources[key]);
-}
-}
-} catch (e) {
-console.error("Speicherstand konnte nicht geladen werden:", e);
-}
-}
-// Start-Initialisierung
-loadGame();
-renderUI();
-updateClock();
-// Intervalle starten
-setInterval(updateClock, 1000);   // Uhr jede Sekunde aktualisieren
-setInterval(saveGame, 10000);     // Autosave alle 10 Sekunden (10.000 ms)
+                raw = localStorage.getItem(SAVE_KEY);
+            } catch (e) {
+                storageOk = false;
+                console.error("Speicher nicht lesbar:", e);
+                setStatus("⚠ Speichern nicht möglich (Browser-Speicher gesperrt)");
+                return;
+            }
+            if (!raw) return;
+
+            try {
+                applySave(JSON.parse(raw));
+            } catch (e) {
+                console.error("Speicherstand konnte nicht geladen werden:", e);
+            }
+        }
+
+        /* =================================================================
+           6. START
+           ================================================================= */
+        loadGame();
+        lastTick = Date.now();
+        buildUI();
+        updateUI();
+        updateClock();
+
+        setInterval(() => { tick(); updateUI(); }, 250); // Regeneration & Button-Status
+        setInterval(updateClock, 1000);
+        setInterval(saveGame, AUTOSAVE_MS);
+
+        // Speichern, wenn der Tab verlassen oder im Hintergrund pausiert wird
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                saveGame();
+            } else {
+                tick();          // Zeit im Hintergrund nachrechnen
+                updateUI();
+            }
+        });
+        window.addEventListener('pagehide', saveGame);
+
+        // Mehrere Tabs: Stand des zuletzt speichernden Tabs übernehmen
+        window.addEventListener('storage', (e) => {
+            if (e.key !== SAVE_KEY || !e.newValue) return;
+            try {
+                applySave(JSON.parse(e.newValue));
+                lastTick = Date.now();
+                updateUI();
+            } catch (err) {
+                console.error("Synchronisation fehlgeschlagen:", err);
+            }
+        });
+    </script>
+</body>
+</html>
