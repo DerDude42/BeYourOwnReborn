@@ -478,6 +478,7 @@
             health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
             energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.2 }, // 1 Energie alle 5 Ticks
             money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 },
+            fame:   { name: "Ruhm",    hasMax: true,  start: 0,  max: 20, visible: () => state.resources.fame.current > 0 || usesOf("patrol") > 0 },
             food:   { name: "Essen",   hasMax: true,  start: 5,  max: 20, drainPerTick: 0.05, drainFlag: "foodDrain" } // Verbrauch pro Tick, erst aktiv, wenn state.flags.foodDrain gesetzt ist
         };
 
@@ -678,7 +679,8 @@
                 id: "meditation",
                 tab: "loop",
                 name: "Meditation",
-                desc: "Vervielfacht die Energie-Regeneration, solange sie läuft.",
+                desc: "Vervielfacht die Energie-Regeneration, solange sie läuft. Freigeschaltet nach Geist trainieren 5/5.",
+                visible: () => upgradeLevel("mind") >= 5,
                 skill: true,
                 info: () => `${skillText("meditation")} · Regeneration x${fmt(regenMultOf("meditation"), 3)}`
             },
@@ -712,6 +714,20 @@
                 atkPerUse: 0.2,
                 levelBonus: { health: 1, energy: 1 },
                 info: () => `Level ${usesOf("fullbody")}/5 · Kosten: 5 Gold, 5 Energie · Dauer 10 Ticks`
+            },
+            {
+                id: "sparring",
+                tab: "training",
+                name: "Übungskampf",
+                desc: "Pro Abschluss: +2 max. Gesundheit. Freigeschaltet bei 20 Ruhm.",
+                visible: () => state.resources.fame.current >= 20 - 1e-9 || usesOf("sparring") > 0,
+                cost: { energy: 5 },
+                drain: { health: 0.5 },
+                duration: 10,
+                maxUses: 5,
+                noCrit: true,
+                levelBonus: { health: 2 },
+                info: () => `Level ${usesOf("sparring")}/5 · Kosten: 5 Energie · -0,5 Gesundheit/Tick · Dauer 10 Ticks`
             },
             {
                 id: "apprentice",
@@ -763,6 +779,18 @@
                     const d = drainOf(activityById("hunt"));
                     return `Dauer 5 Ticks · -${fmt(d.health)} Gesundheit/Tick · -${fmt(d.energy)} Energie/Tick · Ertrag: ${1 + statBonus("huntFood")} Essen · ${usesOf("hunt")}x durchgeführt`;
                 }
+            },
+            {
+                id: "patrol",
+                tab: "actions",
+                name: "Patrouille",
+                desc: "Patrouilliere durch die Straßen. +1 Ruhm pro Durchgang (max. 10x).",
+                drain: { energy: 1 },
+                duration: 10,
+                maxUses: 10,
+                noCrit: true,
+                onComplete: () => rollLoot([{ chance: 1, give: { fame: 1 } }]),
+                info: () => `${usesOf("patrol")}/10 · -1 Energie/Tick · Dauer 10 Ticks · +1 Ruhm`
             },
             {
                 id: "stalk",
@@ -876,6 +904,7 @@
             { label: "Lehre",                get: () => `${usesOf("apprentice")}/${activityById("apprentice").maxUses}` },
             { label: "Angriff",              get: () => `${fmt(atk())}` },
             { label: "Essen",                get: () => `${Math.floor(state.resources.food.current + 1e-9)}/${resMax("food")}` + (passiveDrainOf("food") > 0 ? ` (-${fmt(passiveDrainOf("food"))}/Tick)` : "") },
+            { label: "Ruhm",                 get: () => `${Math.floor(state.resources.fame.current + 1e-9)}/${resMax("fame")}` },
             { label: "Crit-Chance",          get: () => `${fmt(critChance() * 100, 0)} % (Ergebnis x${CRIT_MULT})` }
         ];
         for (const [id, it] of Object.entries(LOOT_ITEMS)) {
@@ -1695,6 +1724,9 @@
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 const current = Math.floor(state.resources[key].current + 1e-9);
                 setText(ui.res[key], cfg.hasMax ? `${current}/${resMax(key)}` : `${current}`);
+                const box = ui.res[key].parentElement;
+                const show = !cfg.visible || cfg.visible();
+                if (box.hidden === show) box.hidden = !show;
             }
             for (const action of ACTION_CONFIG) {
                 const btn = ui.buttons[action.id];
