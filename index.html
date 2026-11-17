@@ -146,6 +146,31 @@
             font-weight: bold;
         }
 
+        /* --- SHOP --- */
+        [hidden] {
+            display: none !important; /* sonst überschreibt display:block das hidden-Attribut */
+        }
+
+        .card-title {
+            font-size: 1.05rem;
+            margin-bottom: 12px;
+        }
+
+        #shop-items {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        #shop-items .action-btn {
+            margin-bottom: 0;
+        }
+
+        .btn-price {
+            color: #d6b04e;
+            font-size: 0.95rem;
+        }
+
         /* --- DEZENTE STATUS-ZEILE UNTEN --- */
         footer {
             padding: 10px 16px;
@@ -165,6 +190,11 @@
 
     <main>
         <section class="card" id="actions-container"></section>
+
+        <section class="card" id="shop-card" hidden>
+            <h2 class="card-title">Shop</h2>
+            <div id="shop-items"></div>
+        </section>
     </main>
 
     <footer id="save-status">Autosave aktiv</footer>
@@ -175,8 +205,8 @@
            regenPerSec: Regeneration pro Sekunde (optional, nur sinnvoll mit hasMax)
            ================================================================= */
         const RESOURCE_CONFIG = {
-            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerSec: 1 }, // 1 Energie / 1 Sek.
-            money:  { name: "Geld",    hasMax: false, start: 0,  max: 0 }
+            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerSec: 0.2 }, // 1 Energie / 5 Sek.
+            money:  { name: "Gold",    hasMax: false, start: 0,  max: 0 }
         };
 
         const ACTION_CONFIG = [
@@ -186,6 +216,35 @@
                 desc: "Bitte Passanten um eine kleine Münze.",
                 cost:   { energy: 2 },
                 reward: { money: 1 }
+            }
+        ];
+
+        // unlock: Gold-Stand, ab dem der Gegenstand im Shop erscheint (bleibt danach dauerhaft sichtbar)
+        // maxOwned: maximale Anzahl, die man besitzen kann (null = unbegrenzt)
+        const ITEM_CONFIG = [
+            {
+                id: "stick",
+                name: "Stock",
+                desc: "Ein stabiler Ast. Besser als nichts.",
+                unlock: { money: 10 },
+                cost:   { money: 5 },
+                maxOwned: 1
+            },
+            {
+                id: "arrow",
+                name: "Pfeil",
+                desc: "Spitz und gerade.",
+                unlock: { money: 20 },
+                cost:   { money: 2 },
+                maxOwned: null
+            },
+            {
+                id: "bow",
+                name: "Bogen",
+                desc: "Ohne Pfeile nutzlos.",
+                unlock: { money: 30 },
+                cost:   { money: 20 },
+                maxOwned: 1
             }
         ];
 
@@ -202,6 +261,8 @@
 
         function initDefaultState() {
             state.resources = {};
+            state.unlocked = [];   // IDs der freigeschalteten Shop-Items
+            state.inventory = {};  // Item-ID -> Anzahl
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 state.resources[key] = { current: cfg.start };
             }
@@ -268,8 +329,43 @@
                 res.current = clampRes(resKey, res.current + amount);
             }
 
+            checkUnlocks();
             updateUI();
             saveGame(); // sofort speichern, nicht erst beim nächsten Intervall
+        }
+
+        /* ---- Shop ---- */
+        // Schaltet Items frei, deren Gold-Schwelle erreicht wurde (bleibt dauerhaft freigeschaltet)
+        function checkUnlocks() {
+            for (const item of ITEM_CONFIG) {
+                if (!state.unlocked.includes(item.id) && canAfford(item.unlock)) {
+                    state.unlocked.push(item.id);
+                }
+            }
+        }
+
+        function ownedCount(item) {
+            return state.inventory[item.id] || 0;
+        }
+
+        function isMaxed(item) {
+            return item.maxOwned != null && ownedCount(item) >= item.maxOwned;
+        }
+
+        function buyItem(itemId) {
+            const item = ITEM_CONFIG.find(i => i.id === itemId);
+            if (!item || !state.unlocked.includes(item.id)) return;
+
+            tick();
+            if (isMaxed(item) || !canAfford(item.cost)) { updateUI(); return; }
+
+            for (const [resKey, amount] of Object.entries(item.cost)) {
+                state.resources[resKey].current -= amount;
+            }
+            state.inventory[item.id] = ownedCount(item) + 1;
+
+            updateUI();
+            saveGame();
         }
 
         /* =================================================================
@@ -336,6 +432,38 @@
                 actContainer.appendChild(btn);
                 ui.buttons[action.id] = btn;
             }
+
+            // Shop (Karte bleibt versteckt, bis das erste Item freigeschaltet ist)
+            ui.shopCard = document.getElementById('shop-card');
+            ui.items = {};
+            const shopContainer = document.getElementById('shop-items');
+            shopContainer.textContent = "";
+            for (const item of ITEM_CONFIG) {
+                const btn = document.createElement('button');
+                btn.className = 'action-btn';
+                btn.type = 'button';
+                btn.hidden = true;
+                btn.addEventListener('click', () => buyItem(item.id));
+
+                const header = document.createElement('div');
+                header.className = 'btn-header';
+                const nameSpan = document.createElement('span');
+                nameSpan.textContent = item.name;
+                const priceSpan = document.createElement('span');
+                priceSpan.className = 'btn-price';
+                header.append(nameSpan, priceSpan);
+
+                const desc = document.createElement('div');
+                desc.className = 'btn-desc';
+                desc.appendChild(document.createTextNode(item.desc));
+                const ownedSpan = document.createElement('span');
+                ownedSpan.className = 'btn-cost';
+                desc.appendChild(ownedSpan);
+
+                btn.append(header, desc);
+                shopContainer.appendChild(btn);
+                ui.items[item.id] = { btn, price: priceSpan, owned: ownedSpan };
+            }
         }
 
         function updateUI() {
@@ -347,6 +475,22 @@
                 const btn = ui.buttons[action.id];
                 const disabled = !canAfford(action.cost);
                 if (btn.disabled !== disabled) btn.disabled = disabled;
+            }
+
+            // Shop
+            const shopOpen = state.unlocked.length > 0;
+            if (ui.shopCard.hidden === shopOpen) ui.shopCard.hidden = !shopOpen;
+            for (const item of ITEM_CONFIG) {
+                const el = ui.items[item.id];
+                const visible = state.unlocked.includes(item.id);
+                if (el.btn.hidden === visible) el.btn.hidden = !visible;
+                if (!visible) continue;
+
+                const maxed = isMaxed(item);
+                setText(el.price, maxed ? "Im Besitz" : formatResMap(item.cost));
+                setText(el.owned, `Besitz: ${ownedCount(item)}`);
+                const disabled = maxed || !canAfford(item.cost);
+                if (el.btn.disabled !== disabled) el.btn.disabled = disabled;
             }
         }
 
@@ -366,7 +510,9 @@
             const payload = {
                 version: SAVE_VERSION,
                 lastSaved: Date.now(),
-                resources: {}
+                resources: {},
+                unlocked: [...state.unlocked],
+                inventory: { ...state.inventory }
             };
             for (const key of Object.keys(RESOURCE_CONFIG)) {
                 payload.resources[key] = { current: state.resources[key].current };
@@ -396,10 +542,27 @@
                 }
             }
 
+            // Shop: freigeschaltete Items und Inventar (nur bekannte IDs, nur gültige Zahlen)
+            if (Array.isArray(parsed.unlocked)) {
+                state.unlocked = ITEM_CONFIG
+                    .map(i => i.id)
+                    .filter(id => parsed.unlocked.includes(id));
+            }
+            if (parsed.inventory && typeof parsed.inventory === 'object') {
+                for (const item of ITEM_CONFIG) {
+                    const n = parsed.inventory[item.id];
+                    if (Number.isInteger(n) && n > 0) {
+                        state.inventory[item.id] = item.maxOwned != null ? Math.min(n, item.maxOwned) : n;
+                    }
+                }
+            }
+
             // Offline-Fortschritt: Regeneration für die Zeit seit dem letzten Speichern
             if (typeof parsed.lastSaved === 'number' && Number.isFinite(parsed.lastSaved)) {
                 regenerate(Math.max(0, (Date.now() - parsed.lastSaved) / 1000));
             }
+
+            checkUnlocks();
         }
 
         function loadGame() {
