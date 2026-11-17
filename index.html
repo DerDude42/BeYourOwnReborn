@@ -369,17 +369,26 @@
                 maxOwned: 1,
                 effects: { sleepBonus: 0.5 }
             },
-              {
+            {
                 id: "shirt",
                 name: "T-Shirt",
                 desc: "wärmt und schützt beim jagen vor Kratzern: -0,2 Gesundheit/Tick weniger beim jagen",
                 unlock: { money: 25 },
                 cost:   { money: 15 },
                 maxOwned: 1,
-                effects: { sleepBonus: 0.5 }
+                effects: { huntHealthSave: 0.2 }
             }
         ];
 
+        // Verbrauch pro Tick inkl. Item-Boni (z. B. T-Shirt beim Jagen)
+function drainOf(activity) {
+    const out = {};
+    for (const [key, perTick] of Object.entries(activity.drain || {})) {
+        const bonusName = activity.drainBonus && activity.drainBonus[key];
+        out[key] = Math.max(0, perTick - (bonusName ? itemBonus(bonusName) : 0));
+    }
+    return out;
+}
         /* ---- Grundwerte ---- */
         const BASE_ACTION_POINTS = 1;      // so viele Aktivitäten laufen gleichzeitig
         const MEDITATION_BASE_MULT = 1.05; // Regenerations-Multiplikator der Meditation
@@ -432,9 +441,10 @@
                 name: "Jagen",
                 desc: "Mit 20 % Chance pro Tick gibt es Essen.",
                 drain: { health: 1, energy: 1 },
+                drainBonus: { health: "huntHealthSave" },   // <- neu
                 huntChance: 0.2,
-                info: () => `-1 Gesundheit/Tick · -1 Energie/Tick · Essen: ${state.food}`
-            }
+                info: () => `-${fmt(drainOf(activityById("hunt")).health)} Gesundheit/Tick · -1 Energie/Tick · Essen: ${state.food}`
+}
         ];
 
         // baseCost wächst pro Level um costFactor
@@ -673,7 +683,7 @@
             tick();
             if (isActive(id)) {
                 stopActivity(id);
-            } else if (!canAfford(activity.drain || {})) {
+            } else if (!canAfford(drainOf(activity)) {
                 setStatus("Nicht genug Ressourcen für " + activity.name);
             } else {
                 state.active = state.active.filter(x => activityById(x).tab === activity.tab);
@@ -685,7 +695,7 @@
 
         // Ein Tick einer Aktivität: nur ausführbar, wenn der volle Verbrauch bezahlbar ist, sonst Stopp
         function runActivity(activity) {
-            const drain = activity.drain || {};
+            const drain = const drain = drainOf(activity);
             for (const [key, perTick] of Object.entries(drain)) {
                 if (state.resources[key].current < perTick - 1e-9) {
                     stopActivity(activity.id);
