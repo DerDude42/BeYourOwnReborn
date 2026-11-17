@@ -315,7 +315,7 @@
             health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
             energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.2 }, // 1 Energie alle 5 Ticks
             money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 },
-            food:  { name: "Essen",    hasMax: true,  start: 5,  max: 20 }
+            food:   { name: "Essen",   hasMax: true,  start: 5,  max: 20 }
         };
 
         const ACTION_CONFIG = [
@@ -372,7 +372,7 @@
             {
                 id: "shirt",
                 name: "T-Shirt",
-                desc: "wärmt und schützt beim jagen vor Kratzern: -0,2 Gesundheit/Tick weniger beim jagen",
+                desc: "Wärmt und schützt beim Jagen vor Kratzern: -0,2 Gesundheit/Tick weniger beim Jagen",
                 unlock: { money: 25 },
                 cost:   { money: 15 },
                 maxOwned: 1,
@@ -380,15 +380,6 @@
             }
         ];
 
-        // Verbrauch pro Tick inkl. Item-Boni (z. B. T-Shirt beim Jagen)
-function drainOf(activity) {
-    const out = {};
-    for (const [key, perTick] of Object.entries(activity.drain || {})) {
-        const bonusName = activity.drainBonus && activity.drainBonus[key];
-        out[key] = Math.max(0, perTick - (bonusName ? itemBonus(bonusName) : 0));
-    }
-    return out;
-}
         /* ---- Grundwerte ---- */
         const BASE_ACTION_POINTS = 1;      // so viele Aktivitäten laufen gleichzeitig
         const MEDITATION_BASE_MULT = 1.05; // Regenerations-Multiplikator der Meditation
@@ -441,10 +432,10 @@ function drainOf(activity) {
                 name: "Jagen",
                 desc: "Mit 20 % Chance pro Tick gibt es Essen.",
                 drain: { health: 1, energy: 1 },
-                drainBonus: { health: "huntHealthSave" },   // <- neu
+                drainBonus: { health: "huntHealthSave" },
                 huntChance: 0.2,
-                info: () => `-${fmt(drainOf(activityById("hunt")).health)} Gesundheit/Tick · -1 Energie/Tick · Essen: ${state.food}`
-}
+                info: () => `-${fmt(drainOf(activityById("hunt")).health)} Gesundheit/Tick · -1 Energie/Tick · Essen: ${Math.floor(state.resources.food.current)}`
+            }
         ];
 
         // baseCost wächst pro Level um costFactor
@@ -469,7 +460,7 @@ function drainOf(activity) {
             { label: "Meditations-Multiplikator", get: () => `x${fmt(meditationMult(), 3)}` },
             { label: "Ganzkörper-Level",     get: () => `${state.progress.fullbody.level}` },
             { label: "Angriff",              get: () => `${itemBonus("atk")}` },
-            { label: "Essen",                get: () => `${state.food}` }
+            { label: "Essen",                get: () => `${Math.floor(state.resources.food.current + 1e-9)}/${resMax("food")}` }
         ];
 
         /* =================================================================
@@ -490,7 +481,6 @@ function drainOf(activity) {
             state.active = [];     // laufende Aktivitäten (wird nicht gespeichert)
             state.upgrades = {};   // Upgrade-ID -> Level
             state.progress = {};   // Aktivität-ID -> { level, xp }
-            state.food = 0;        // Beute vom Jagen
             state.ticksPerSec = BASE_TICKS_PER_SEC; // Spielgeschwindigkeit (Regler in den Stats)
             for (const u of UPGRADE_CONFIG) state.upgrades[u.id] = 0;
             for (const a of ACTIVITY_CONFIG) {
@@ -631,6 +621,16 @@ function drainOf(activity) {
             return total;
         }
 
+        // Verbrauch pro Tick inkl. Item-Boni (z. B. T-Shirt beim Jagen)
+        function drainOf(activity) {
+            const out = {};
+            for (const [key, perTick] of Object.entries(activity.drain || {})) {
+                const bonusName = activity.drainBonus && activity.drainBonus[key];
+                out[key] = Math.max(0, perTick - (bonusName ? itemBonus(bonusName) : 0));
+            }
+            return out;
+        }
+
         function resMax(key) {
             const cfg = RESOURCE_CONFIG[key];
             if (!cfg.hasMax) return Infinity;
@@ -683,7 +683,7 @@ function drainOf(activity) {
             tick();
             if (isActive(id)) {
                 stopActivity(id);
-            } else if (!canAfford(drainOf(activity)) {
+            } else if (!canAfford(drainOf(activity))) {
                 setStatus("Nicht genug Ressourcen für " + activity.name);
             } else {
                 state.active = state.active.filter(x => activityById(x).tab === activity.tab);
@@ -695,7 +695,7 @@ function drainOf(activity) {
 
         // Ein Tick einer Aktivität: nur ausführbar, wenn der volle Verbrauch bezahlbar ist, sonst Stopp
         function runActivity(activity) {
-            const drain = const drain = drainOf(activity);
+            const drain = drainOf(activity);
             for (const [key, perTick] of Object.entries(drain)) {
                 if (state.resources[key].current < perTick - 1e-9) {
                     stopActivity(activity.id);
@@ -717,7 +717,9 @@ function drainOf(activity) {
                     p.level++;
                 }
             }
-            if (activity.huntChance && Math.random() < activity.huntChance) state.food++;
+            if (activity.huntChance && Math.random() < activity.huntChance) {
+                state.resources.food.current = clampRes("food", state.resources.food.current + 1);
+            }
         }
 
         /* ---- Upgrades ---- */
@@ -1011,7 +1013,6 @@ function drainOf(activity) {
                 inventory: { ...state.inventory },
                 upgrades: { ...state.upgrades },
                 progress: JSON.parse(JSON.stringify(state.progress)),
-                food: state.food,
                 ticksPerSec: state.ticksPerSec
             };
             for (const key of Object.keys(RESOURCE_CONFIG)) {
@@ -1074,7 +1075,6 @@ function drainOf(activity) {
                 }
             }
 
-            if (Number.isInteger(parsed.food) && parsed.food >= 0) state.food = parsed.food;
             if (Number.isInteger(parsed.ticksPerSec) && parsed.ticksPerSec >= 1 && parsed.ticksPerSec <= MAX_TICKS_PER_SEC) {
                 state.ticksPerSec = parsed.ticksPerSec;
             }
