@@ -156,19 +156,71 @@
             margin-bottom: 12px;
         }
 
-        #shop-items {
+        #shop-items, .btn-list {
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
 
-        #shop-items .action-btn {
+        #shop-items .action-btn, .btn-list .action-btn {
             margin-bottom: 0;
         }
 
         .btn-price {
             color: #d6b04e;
             font-size: 0.95rem;
+        }
+
+        /* --- TABS / MENÜS --- */
+        .tab-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        #tabbar {
+            display: flex;
+            flex-shrink: 0;
+            background-color: var(--card-bg);
+            border-top: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            flex: 1;
+            min-height: 54px;
+            padding: 8px 2px;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.78rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            box-shadow: inset 0 2px 0 var(--accent);
+        }
+
+        .action-btn.running {
+            border-color: var(--success);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 11px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.95rem;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-row span:first-child {
+            color: var(--text-muted);
         }
 
         /* --- DEZENTE STATUS-ZEILE UNTEN --- */
@@ -189,15 +241,53 @@
     </header>
 
     <main>
-        <section class="card" id="actions-container"></section>
+        <div class="tab-panel" id="tab-actions">
+            <section class="card" id="actions-container"></section>
 
-        <section class="card" id="shop-card" hidden>
-            <h2 class="card-title">Shop</h2>
-            <div id="shop-items"></div>
-        </section>
+            <section class="card" id="shop-card" hidden>
+                <h2 class="card-title">Shop</h2>
+                <div id="shop-items"></div>
+            </section>
+        </div>
+
+        <div class="tab-panel" id="tab-loop" hidden>
+            <section class="card">
+                <h2 class="card-title">Loop-Aktionen</h2>
+                <div class="btn-list" id="loop-list"></div>
+            </section>
+        </div>
+
+        <div class="tab-panel" id="tab-training" hidden>
+            <section class="card">
+                <h2 class="card-title">Training</h2>
+                <div class="btn-list" id="training-list"></div>
+            </section>
+        </div>
+
+        <div class="tab-panel" id="tab-upgrades" hidden>
+            <section class="card">
+                <h2 class="card-title">Upgrades</h2>
+                <div class="btn-list" id="upgrade-list"></div>
+            </section>
+        </div>
+
+        <div class="tab-panel" id="tab-stats" hidden>
+            <section class="card">
+                <h2 class="card-title">Stats</h2>
+                <div id="stats-list"></div>
+            </section>
+        </div>
     </main>
 
     <footer id="save-status">Autosave aktiv</footer>
+
+    <nav id="tabbar">
+        <button type="button" class="tab-btn active" data-tab="actions">Aktionen</button>
+        <button type="button" class="tab-btn" data-tab="loop">Loop</button>
+        <button type="button" class="tab-btn" data-tab="training">Training</button>
+        <button type="button" class="tab-btn" data-tab="upgrades">Upgrades</button>
+        <button type="button" class="tab-btn" data-tab="stats">Stats</button>
+    </nav>
 
     <script>
         /* =================================================================
@@ -205,7 +295,7 @@
            regenPerSec: Regeneration pro Sekunde (optional, nur sinnvoll mit hasMax)
            ================================================================= */
         const RESOURCE_CONFIG = {
-            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerSec: 0.2 }, // 1 Energie / 5 Sek.
+            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerSec: 1 }, // 1 Energie / 5 Sek.
             money:  { name: "Gold",    hasMax: false, start: 0,  max: 0 }
         };
 
@@ -248,6 +338,62 @@
             }
         ];
 
+        /* ---- Grundwerte ---- */
+        const BASE_ACTION_POINTS = 1;      // so viele Aktivitäten laufen gleichzeitig
+        const BASE_HEALTH = 10;            // + 1 pro Ganzkörper-Level
+        const MEDITATION_BASE_MULT = 1.05; // Regenerations-Multiplikator der Meditation
+        const MIND_UPGRADE_FACTOR = 1.10;  // "Geist trainieren": Multiplikator x1,10 pro Level
+
+        const fmt = (n, digits = 2) => n.toLocaleString('de-DE', { maximumFractionDigits: digits });
+
+        // Aktivitäten laufen, bis man sie stoppt (belegen 1 Aktionspunkt)
+        // tab: "loop" | "training"; drain: Verbrauch pro Sekunde; xpPerSec/xpPerLevel: Trainingsfortschritt
+        const ACTIVITY_CONFIG = [
+            {
+                id: "meditation",
+                tab: "loop",
+                name: "Meditation",
+                desc: "Vervielfacht die Energie-Regeneration, solange sie läuft.",
+                info: () => `Regeneration x${fmt(meditationMult(), 3)}`
+            },
+            {
+                id: "fullbody",
+                tab: "training",
+                name: "Ganzkörpertraining",
+                desc: "Kostet Energie, stärkt den ganzen Körper.",
+                drain: { energy: 0.5 },
+                xpPerSec: 1,
+                xpPerLevel: 20,
+                info: () => {
+                    const p = state.progress.fullbody;
+                    return `Level ${p.level} · ${Math.floor(p.xp)}/20 XP · -0,5 Energie/Sek.`;
+                }
+            }
+        ];
+
+        // baseCost wächst pro Level um costFactor
+        const UPGRADE_CONFIG = [
+            {
+                id: "mind",
+                name: "Geist trainieren",
+                desc: "Erhöht den Multiplikator der Meditation um 10 %.",
+                baseCost: { money: 10 },
+                costFactor: 1.5,
+                info: () => `Level ${upgradeLevel("mind")} · Meditation x${fmt(meditationMult(), 3)} → x${fmt(meditationMult() * MIND_UPGRADE_FACTOR, 3)}`
+            }
+        ];
+
+        // Stats-Liste: einfach weitere Einträge ergänzen
+        const STAT_CONFIG = [
+            { label: "Gesundheit",           get: () => `${maxHealth()}/${maxHealth()}` },
+            { label: "Aktionspunkte",        get: () => `${state.active.length}/${apTotal()} belegt` },
+            { label: "Energie",              get: () => `${Math.floor(state.resources.energy.current + 1e-9)}/${RESOURCE_CONFIG.energy.max}` },
+            { label: "Energie-Regeneration", get: () => `${fmt(RESOURCE_CONFIG.energy.regenPerSec * regenMult())}/Sek.` },
+            { label: "Gold",                 get: () => `${Math.floor(state.resources.money.current + 1e-9)}` },
+            { label: "Meditations-Multiplikator", get: () => `x${fmt(meditationMult(), 3)}` },
+            { label: "Ganzkörper-Level",     get: () => `${state.progress.fullbody.level}` }
+        ];
+
         /* =================================================================
            2. SPIELZUSTAND
            ================================================================= */
@@ -263,6 +409,13 @@
             state.resources = {};
             state.unlocked = [];   // IDs der freigeschalteten Shop-Items
             state.inventory = {};  // Item-ID -> Anzahl
+            state.active = [];     // laufende Aktivitäten (wird nicht gespeichert)
+            state.upgrades = {};   // Upgrade-ID -> Level
+            state.progress = {};   // Aktivität-ID -> { level, xp }
+            for (const u of UPGRADE_CONFIG) state.upgrades[u.id] = 0;
+            for (const a of ACTIVITY_CONFIG) {
+                if (a.xpPerLevel) state.progress[a.id] = { level: 0, xp: 0 };
+            }
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 state.resources[key] = { current: cfg.start };
             }
@@ -286,12 +439,12 @@
         }
 
         // Regeneration für eine vergangene Zeitspanne (Sekunden) anwenden
-        function regenerate(seconds) {
+        function regenerate(seconds, mult = 1) {
             if (!(seconds > 0)) return;
             for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
                 if (cfg.regenPerSec > 0) {
                     const res = state.resources[key];
-                    res.current = clampRes(key, res.current + cfg.regenPerSec * seconds);
+                    res.current = clampRes(key, res.current + cfg.regenPerSec * seconds * mult);
                 }
             }
         }
@@ -299,8 +452,15 @@
         // Zeitbasiert statt zählerbasiert: bleibt korrekt, auch wenn der Tab gedrosselt wird
         function tick() {
             const now = Date.now();
-            regenerate(Math.max(0, (now - lastTick) / 1000));
+            const dt = Math.max(0, (now - lastTick) / 1000);
             lastTick = now;
+            if (!(dt > 0)) return;
+
+            regenerate(dt, regenMult());
+            for (const id of [...state.active]) {
+                const activity = activityById(id);
+                if (activity) runActivity(activity, dt);
+            }
         }
 
         function executeAction(actionId) {
@@ -364,6 +524,83 @@
             }
             state.inventory[item.id] = ownedCount(item) + 1;
 
+            updateUI();
+            saveGame();
+        }
+
+        /* ---- Aktivitäten (Loop & Training) ---- */
+        function activityById(id) { return ACTIVITY_CONFIG.find(a => a.id === id); }
+        function isActive(id) { return state.active.includes(id); }
+        function apTotal() { return BASE_ACTION_POINTS; }
+        function upgradeLevel(id) { return state.upgrades[id] || 0; }
+        function maxHealth() { return BASE_HEALTH + state.progress.fullbody.level; }
+
+        function meditationMult() {
+            return MEDITATION_BASE_MULT * Math.pow(MIND_UPGRADE_FACTOR, upgradeLevel("mind"));
+        }
+
+        function regenMult() {
+            return isActive("meditation") ? meditationMult() : 1;
+        }
+
+        function stopActivity(id) {
+            state.active = state.active.filter(x => x !== id);
+        }
+
+        function toggleActivity(id) {
+            const activity = activityById(id);
+            if (!activity) return;
+            tick();
+            if (isActive(id)) {
+                stopActivity(id);
+            } else if (state.active.length < apTotal() && canAfford(activity.drain || {})) {
+                state.active.push(id);
+            }
+            updateUI();
+        }
+
+        // Verbrauch & Fortschritt für dt Sekunden; stoppt automatisch, wenn die Ressource leer ist
+        function runActivity(activity, dt) {
+            let secs = dt;
+            for (const [key, perSec] of Object.entries(activity.drain || {})) {
+                secs = Math.min(secs, state.resources[key].current / perSec);
+            }
+            if (secs > 0) {
+                for (const [key, perSec] of Object.entries(activity.drain || {})) {
+                    state.resources[key].current = Math.max(0, state.resources[key].current - perSec * secs);
+                }
+                if (activity.xpPerSec) {
+                    const p = state.progress[activity.id];
+                    p.xp += activity.xpPerSec * secs;
+                    while (p.xp >= activity.xpPerLevel) {
+                        p.xp -= activity.xpPerLevel;
+                        p.level++;
+                    }
+                }
+            }
+            if (secs < dt - 1e-9) stopActivity(activity.id);
+        }
+
+        /* ---- Upgrades ---- */
+        function upgradeCost(upgrade) {
+            const level = upgradeLevel(upgrade.id);
+            const cost = {};
+            for (const [key, base] of Object.entries(upgrade.baseCost)) {
+                cost[key] = Math.ceil(base * Math.pow(upgrade.costFactor, level));
+            }
+            return cost;
+        }
+
+        function buyUpgrade(upgradeId) {
+            const upgrade = UPGRADE_CONFIG.find(u => u.id === upgradeId);
+            if (!upgrade) return;
+            tick();
+            const cost = upgradeCost(upgrade);
+            if (!canAfford(cost)) { updateUI(); return; }
+            for (const [key, amount] of Object.entries(cost)) {
+                state.resources[key].current -= amount;
+            }
+            state.upgrades[upgrade.id] = upgradeLevel(upgrade.id) + 1;
             updateUI();
             saveGame();
         }
@@ -492,6 +729,106 @@
                 const disabled = maxed || !canAfford(item.cost);
                 if (el.btn.disabled !== disabled) el.btn.disabled = disabled;
             }
+
+            updateMenus();
+        }
+
+        // Gemeinsamer Button-Baustein für Loop, Training und Upgrades
+        function createCardButton(name, onClick, rightClass) {
+            const btn = document.createElement('button');
+            btn.className = 'action-btn';
+            btn.type = 'button';
+            btn.addEventListener('click', onClick);
+
+            const header = document.createElement('div');
+            header.className = 'btn-header';
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = name;
+            const right = document.createElement('span');
+            right.className = rightClass;
+            header.append(nameSpan, right);
+
+            const desc = document.createElement('div');
+            desc.className = 'btn-desc';
+            const descText = document.createTextNode('');
+            const extra = document.createElement('span');
+            extra.className = 'btn-cost';
+            desc.append(descText, extra);
+
+            btn.append(header, desc);
+            return { btn, right, desc: descText, extra };
+        }
+
+        function buildMenus() {
+            ui.act = {};
+            ui.up = {};
+            ui.stats = [];
+
+            const lists = {
+                loop: document.getElementById('loop-list'),
+                training: document.getElementById('training-list')
+            };
+            for (const a of ACTIVITY_CONFIG) {
+                const c = createCardButton(a.name, () => toggleActivity(a.id), 'btn-reward');
+                c.desc.textContent = a.desc;
+                lists[a.tab].appendChild(c.btn);
+                ui.act[a.id] = c;
+            }
+
+            const upList = document.getElementById('upgrade-list');
+            for (const u of UPGRADE_CONFIG) {
+                const c = createCardButton(u.name, () => buyUpgrade(u.id), 'btn-price');
+                c.desc.textContent = u.desc;
+                upList.appendChild(c.btn);
+                ui.up[u.id] = c;
+            }
+
+            const statsList = document.getElementById('stats-list');
+            for (const stat of STAT_CONFIG) {
+                const row = document.createElement('div');
+                row.className = 'stat-row';
+                const label = document.createElement('span');
+                label.textContent = stat.label;
+                const value = document.createElement('span');
+                row.append(label, value);
+                statsList.appendChild(row);
+                ui.stats.push(value);
+            }
+        }
+
+        function updateMenus() {
+            for (const a of ACTIVITY_CONFIG) {
+                const c = ui.act[a.id];
+                const running = isActive(a.id);
+                setText(c.right, running ? "● Läuft" : "Start");
+                setText(c.extra, a.info());
+                c.btn.classList.toggle('running', running);
+                const disabled = !running && (state.active.length >= apTotal() || !canAfford(a.drain || {}));
+                if (c.btn.disabled !== disabled) c.btn.disabled = disabled;
+            }
+
+            for (const u of UPGRADE_CONFIG) {
+                const c = ui.up[u.id];
+                const cost = upgradeCost(u);
+                setText(c.right, formatResMap(cost));
+                setText(c.extra, u.info());
+                const disabled = !canAfford(cost);
+                if (c.btn.disabled !== disabled) c.btn.disabled = disabled;
+            }
+
+            STAT_CONFIG.forEach((stat, i) => setText(ui.stats[i], stat.get()));
+        }
+
+        function showTab(name) {
+            document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = p.id !== 'tab-' + name; });
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+        }
+
+        function initTabs() {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                b.addEventListener('click', () => showTab(b.dataset.tab));
+            });
+            showTab('actions');
         }
 
         function updateClock() {
@@ -512,7 +849,9 @@
                 lastSaved: Date.now(),
                 resources: {},
                 unlocked: [...state.unlocked],
-                inventory: { ...state.inventory }
+                inventory: { ...state.inventory },
+                upgrades: { ...state.upgrades },
+                progress: JSON.parse(JSON.stringify(state.progress))
             };
             for (const key of Object.keys(RESOURCE_CONFIG)) {
                 payload.resources[key] = { current: state.resources[key].current };
@@ -562,6 +901,23 @@
                 regenerate(Math.max(0, (Date.now() - parsed.lastSaved) / 1000));
             }
 
+            // Upgrades & Trainingsfortschritt (nur bekannte IDs, nur gültige Zahlen)
+            if (parsed.upgrades && typeof parsed.upgrades === 'object') {
+                for (const u of UPGRADE_CONFIG) {
+                    const n = parsed.upgrades[u.id];
+                    if (Number.isInteger(n) && n > 0) state.upgrades[u.id] = n;
+                }
+            }
+            if (parsed.progress && typeof parsed.progress === 'object') {
+                for (const a of ACTIVITY_CONFIG) {
+                    const q = parsed.progress[a.id];
+                    if (a.xpPerLevel && q && Number.isInteger(q.level) && q.level >= 0
+                        && Number.isFinite(q.xp) && q.xp >= 0) {
+                        state.progress[a.id] = { level: q.level, xp: Math.min(q.xp, a.xpPerLevel) };
+                    }
+                }
+            }
+
             checkUnlocks();
         }
 
@@ -592,6 +948,8 @@
         loadGame();
         lastTick = Date.now();
         buildUI();
+        buildMenus();
+        initTabs();
         updateUI();
         updateClock();
 
