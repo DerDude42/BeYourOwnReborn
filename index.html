@@ -2,15 +2,14 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <!-- Wichtig für Handys: Verhindert ungewolltes Zoomen beim schnellen Tippen -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Chronicle Prototyp</title>
     <style>
-        /* --- GRUNDLAYOUT & FARBEN (Dark Mode) --- */
         :root {
             --bg-color: #121214;
             --card-bg: #1e1e24;
             --accent: #4e89ae;
+            --danger: #a84a4a;
             --text-main: #e1e1e6;
             --text-muted: #9a9aa2;
             --border: #2c2c35;
@@ -21,34 +20,43 @@
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            user-select: none; /* Verhindert Textmarkieren beim Tippen auf Buttons */
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow: hidden;
         }
 
         body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
             display: flex;
             flex-direction: column;
-            height: 100dvh; /* Nutzt die exakte dynamische Handy-Bildschirmhöhe */
-            overflow: hidden;
+            height: 100dvh;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
         }
 
         /* --- OBERE RESSOURCEN-LEISTE --- */
         header {
             background-color: var(--card-bg);
-            padding: 12px 16px;
+            padding: 16px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-around;
-            font-size: 0.95rem;
+            font-size: 1.1rem;
             font-weight: bold;
+            flex-shrink: 0;
         }
 
         .res-box span {
             color: var(--accent);
         }
 
-        /* --- HAUPTBEREICH (SCROLLBAR) --- */
+        /* --- HAUPTBEREICH --- */
         main {
             flex: 1;
             overflow-y: auto;
@@ -56,49 +64,58 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
+            -webkit-overflow-scrolling: touch;
         }
 
         .card {
             background-color: var(--card-bg);
             border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 14px;
+            border-radius: 12px;
+            padding: 16px;
         }
 
         h2 {
-            font-size: 1.1rem;
-            margin-bottom: 10px;
+            font-size: 0.95rem;
+            margin-bottom: 12px;
             color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
         }
 
         /* --- STORY LOG --- */
         #story-log {
-            max-height: 120px;
+            max-height: 130px;
             overflow-y: auto;
-            font-size: 0.9rem;
-            line-height: 1.4;
-            color: #c4c4cc;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            color: #d0d0d8;
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 8px;
         }
 
-        /* --- BUTTONS & FORTSCHRITTSBALKEN --- */
+        .log-highlight {
+            color: var(--accent);
+            font-weight: bold;
+        }
+
+        /* --- TOUCH-OPTIMIERTE BUTTONS --- */
         .action-btn {
             width: 100%;
             background-color: #272730;
             border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 12px;
+            border-radius: 10px;
+            padding: 16px;
             color: var(--text-main);
             text-align: left;
             position: relative;
             overflow: hidden;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             cursor: pointer;
-            transition: transform 0.05s;
+        }
+
+        .action-btn:last-child {
+            margin-bottom: 0;
         }
 
         .action-btn:active {
@@ -106,59 +123,67 @@
         }
 
         .action-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
+            opacity: 0.45;
+        }
+
+        .danger-btn {
+            background-color: rgba(168, 74, 74, 0.2);
+            border-color: var(--danger);
+            text-align: center;
+            font-weight: bold;
         }
 
         .btn-header {
             display: flex;
             justify-content: space-between;
+            align-items: center;
+            font-size: 1.05rem;
             font-weight: bold;
             position: relative;
             z-index: 2;
         }
 
         .btn-desc {
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             color: var(--text-muted);
-            margin-top: 4px;
+            margin-top: 6px;
             position: relative;
             z-index: 2;
         }
 
-        /* Fortschrittsbalken im Button */
         .progress-fill {
             position: absolute;
             top: 0;
             left: 0;
             height: 100%;
-            background-color: rgba(78, 137, 174, 0.3);
+            background-color: rgba(78, 137, 174, 0.35);
             width: 0%;
             z-index: 1;
             transition: width 0.1s linear;
         }
 
-        /* --- UNTERE NAVIGATION (DAUMENFREUNDLICH) --- */
+        /* --- UNTERE NAVIGATION --- */
         nav {
             background-color: var(--card-bg);
             border-top: 1px solid var(--border);
             display: flex;
+            flex-shrink: 0;
         }
 
         .nav-btn {
             flex: 1;
-            padding: 16px;
+            padding: 18px 8px;
             background: none;
             border: none;
             color: var(--text-muted);
             font-weight: bold;
-            font-size: 1rem;
-            cursor: pointer;
+            font-size: 0.95rem;
         }
 
         .nav-btn.active {
             color: var(--accent);
-            border-top: 2px solid var(--accent);
+            border-top: 3px solid var(--accent);
+            background-color: rgba(78, 137, 174, 0.08);
         }
 
         .hidden {
@@ -168,15 +193,12 @@
 </head>
 <body>
 
-    <!-- RESSOURCEN -->
     <header>
         <div class="res-box">Energie: <span id="res-energy">10</span>/<span id="res-max-energy">10</span></div>
         <div class="res-box">Wissen: <span id="res-knowledge">0</span></div>
     </header>
 
-    <!-- HAUPTINHALT -->
     <main>
-        <!-- STORY-BEREICH -->
         <section class="card">
             <h2>Chronik</h2>
             <div id="story-log">
@@ -219,142 +241,205 @@
                 <div class="btn-desc">Erhöht maximale Energie um +5</div>
             </button>
         </section>
+
+        <!-- TAB 3: SYSTEM / SPEICHERN -->
+        <section id="tab-system" class="card hidden">
+            <h2>System</h2>
+            <button class="action-btn" onclick="saveGame(true)">
+                <div class="btn-header"><span>Spielstand manuell speichern</span></div>
+                <div class="btn-desc" id="save-status">Speichert automatisch alle 5 Sekunden</div>
+            </button>
+
+            <button class="action-btn danger-btn" onclick="resetGame()">
+                Spielstand komplett zurücksetzen
+            </button>
+        </section>
     </main>
 
-    <!-- UNTERE NAVIGATION -->
     <nav>
         <button class="nav-btn active" id="nav-actions" onclick="switchTab('actions')">Aktionen</button>
         <button class="nav-btn" id="nav-upgrades" onclick="switchTab('upgrades')">Upgrades</button>
+        <button class="nav-btn" id="nav-system" onclick="switchTab('system')">System</button>
     </nav>
 
     <script>
-        /* --- 1. SPIELZUSTAND (STATE) --- */
-        const game = {
+        const SAVE_KEY = "chronicle_proto_save_v1";
+
+        // Standardwerte für ein neues Spiel
+        const defaultGame = {
             energy: 10,
             maxEnergy: 10,
             knowledge: 0,
             activeAction: null,
             progress: 0,
-            storyFlags: {
-                firstKnowledge: false
-            },
-            upgrades: {
-                mind: { level: 0, cost: 5 }
-            }
+            lastSaved: Date.now(),
+            storyFlags: { firstKnowledge: false },
+            upgrades: { mind: { level: 0, cost: 5 } }
         };
+
+        let game = JSON.parse(JSON.stringify(defaultGame));
 
         const actions = {
             meditate: { duration: 2.0, energyCost: 2 },
             rest: { duration: 3.0, energyCost: 0 }
         };
 
-        /* --- 2. SPIELSCHLEIFE (GAME LOOP - LÄUFT 10x PRO SEKUNDE) --- */
-        const TICK_RATE = 100; // Millisekunden
-        setInterval(() => {
-            if (game.activeAction) {
-                const act = actions[game.activeAction];
-                game.progress += (TICK_RATE / 1000) / act.duration;
-
-                // Aktion abgeschlossen?
-                if (game.progress >= 1) {
-                    completeAction(game.activeAction);
-                    game.progress = 0;
-                    
-                    // Prüfen, ob Aktion automatisch wiederholt werden kann
-                    if (!canStartAction(game.activeAction)) {
-                        game.activeAction = null;
-                    }
-                }
-            }
-            updateUI();
-        }, TICK_RATE);
-
-        /* --- 3. SPIELLOGIK --- */
-        function canStartAction(actionId) {
-            if (actionId === 'meditate') return game.energy >= actions.meditate.energyCost;
-            if (actionId === 'rest') return game.energy < game.maxEnergy;
-            return false;
-        }
-
-        function toggleAction(actionId) {
-            if (game.activeAction === actionId) {
-                // Laufende Aktion abbrechen
-                game.activeAction = null;
-                game.progress = 0;
-            } else if (canStartAction(actionId)) {
-                // Neue Aktion starten
-                game.activeAction = actionId;
-                game.progress = 0;
-            }
-            updateUI();
-        }
-
-        function completeAction(actionId) {
-            if (actionId === 'meditate') {
-                game.energy -= actions.meditate.energyCost;
-                game.knowledge += 1;
-                checkStoryEvents();
-            } else if (actionId === 'rest') {
-                game.energy = Math.min(game.maxEnergy, game.energy + 5);
+        /* --- SPEICHERN, LADEN & OFFLINE-FORTSCHRITT --- */
+        function saveGame(manual = false) {
+            game.lastSaved = Date.now();
+            localStorage.setItem(SAVE_KEY, JSON.stringify(game));
+            if (manual) {
+                document.getElementById('save-status').textContent = "Gespeichert um " + new Date().toLocaleTimeString();
             }
         }
 
-        function buyUpgrade(upgId) {
-            const upg = game.upgrades[upgId];
-            if (game.knowledge >= upg.cost) {
-                game.knowledge -= upg.cost;
-                upg.level += 1;
-                upg.cost = Math.floor(upg.cost * 1.5);
-                
-                if (upgId === 'mind') {
-                    game.maxEnergy += 5;
-                    addStoryLog("Dein Geist fühlt sich klarer an. Du kannst nun mehr Energie speichern.");
-                }
-                updateUI();
+        function loadGame() {
+            const savedData = localStorage.getItem(SAVE_KEY);
+            if (!savedData) return;
+
+            try {
+                const parsed = JSON.parse(savedData);
+                // Führt gespeicherte Werte sicher mit Standardwerten zusammen
+                game = {
+                    ...defaultGame,
+                    ...parsed,
+                    storyFlags: { ...defaultGame.storyFlags, ...(parsed.storyFlags || {}) },
+                    upgrades: { ...defaultGame.upgrades, ...(parsed.upgrades || {}) }
+                };
+
+                calculateOfflineProgress();
+            } catch (e) {
+                console.error("Fehler beim Laden des Spielstands:", e);
             }
         }
 
-        function checkStoryEvents() {
-            if (game.knowledge >= 1 && !game.storyFlags.firstKnowledge) {
-                game.storyFlags.firstKnowledge = true;
+        function calculateOfflineProgress() {
+            const now = Date.now();
+            const secondsPassed = Math.floor((now - game.lastSaved) / 1000);
+
+            if (secondsPassed > 2 && game.activeAction) {
+                const actId = game.activeAction;
+                const act = actions[actId];
+                // Maximal 24 Stunden (86400 Sek.) Offline-Fortschritt berechnen
+const effectiveSeconds = Math.min(secondsPassed, 86400);
+const possibleCompletions = Math.floor(effectiveSeconds / act.duration);
+let completedCount = 0;
+for (let i = 0; i < possibleCompletions; i++) {
+if (canStartAction(actId)) {
+completeAction(actId);
+completedCount++;
+} else {
+game.activeAction = null;
+game.progress = 0;
+break;
+}
+}
+if (completedCount > 0) {
+addStoryLog(Während deiner Abwesenheit (${secondsPassed} Sek.) wurde "${actId}" ${completedCount}x ausgeführt., true);
+}
+}
+}
+function resetGame() {
+if (confirm("Möchtest du deinen Spielstand wirklich unwiderruflich löschen?")) {
+localStorage.removeItem(SAVE_KEY);
+location.reload();
+}
+}
+/* --- SPIELSCHLEIFE --- */
+const TICK_RATE = 100;
+setInterval(() => {
+if (game.activeAction) {
+const act = actions[game.activeAction];
+game.progress += (TICK_RATE / 1000) / act.duration;
+if (game.progress >= 1) {
+completeAction(game.activeAction);
+game.progress = 0;
+if (!canStartAction(game.activeAction)) {
+game.activeAction = null;
+}
+}
+}
+updateUI();
+}, TICK_RATE);
+// Automatisches Speichern alle 5 Sekunden
+setInterval(() => saveGame(false), 5000);
+/* --- SPIELLOGIK --- */
+function canStartAction(actionId) {
+if (actionId === 'meditate') return game.energy >= actions.meditate.energyCost;
+if (actionId === 'rest') return game.energy < game.maxEnergy;
+return false;
+}
+function toggleAction(actionId) {
+if (game.activeAction === actionId) {
+game.activeAction = null;
+game.progress = 0;
+} else if (canStartAction(actionId)) {
+game.activeAction = actionId;
+game.progress = 0;
+}
+saveGame(false);
+updateUI();
+}
+function completeAction(actionId) {
+if (actionId === 'meditate') {
+game.energy -= actions.meditate.energyCost;
+game.knowledge += 1;
+checkStoryEvents();
+} else if (actionId === 'rest') {
+game.energy = Math.min(game.maxEnergy, game.energy + 5);
+}
+}
+function buyUpgrade(upgId) {
+const upg = game.upgrades[upgId];
+if (game.knowledge >= upg.cost) {
+game.knowledge -= upg.cost;
+upg.level += 1;
+upg.cost = Math.floor(upg.cost * 1.5);
+if (upgId === 'mind') {
+game.maxEnergy += 5;
+addStoryLog("Dein Geist fühlt sich klarer an. Du kannst nun mehr Energie speichern.");
+}
+saveGame(false);
+updateUI();
+}
+}
+function checkStoryEvents() {
+if (game.knowledge >= 1 && !game.storyFlags.firstKnowledge) {
+game.storyFlags.firstKnowledge = true;
 addStoryLog("Ein erster Funke der Erinnerung kehrt zurück. Du beginnst zu verstehen.");
 }
 }
-function addStoryLog(text) {
+function addStoryLog(text, highlight = false) {
 const log = document.getElementById('story-log');
 const entry = document.createElement('div');
 entry.textContent = "> " + text;
-log.prepend(entry); // Neueste Nachricht oben anzeigen
+if (highlight) entry.classList.add('log-highlight');
+log.prepend(entry);
 }
-/* --- 4. UI-AKTUALISIERUNG & NAVIGATION --- */
+/* --- UI & TABS --- */
 function updateUI() {
-// Ressourcen
 document.getElementById('res-energy').textContent = game.energy;
 document.getElementById('res-max-energy').textContent = game.maxEnergy;
 document.getElementById('res-knowledge').textContent = game.knowledge;
-// Fortschrittsbalken
 document.getElementById('prog-meditate').style.width =
 (game.activeAction === 'meditate' ? game.progress * 100 : 0) + '%';
 document.getElementById('prog-rest').style.width =
 (game.activeAction === 'rest' ? game.progress * 100 : 0) + '%';
-// Buttons deaktivieren, wenn Bedingungen nicht erfüllt sind
 document.getElementById('btn-meditate').disabled = !canStartAction('meditate') && game.activeAction !== 'meditate';
 document.getElementById('btn-rest').disabled = !canStartAction('rest') && game.activeAction !== 'rest';
-// Upgrades
 const mind = game.upgrades.mind;
 document.getElementById('lvl-mind').textContent = mind.level;
 document.getElementById('cost-mind').textContent = mind.cost + " Wissen";
 document.getElementById('upg-mind').disabled = game.knowledge < mind.cost;
 }
 function switchTab(tabName) {
-document.getElementById('tab-actions').classList.add('hidden');
-document.getElementById('tab-upgrades').classList.add('hidden');
-document.getElementById('nav-actions').classList.remove('active');
-document.getElementById('nav-upgrades').classList.remove('active');
+['actions', 'upgrades', 'system'].forEach(t => {
+document.getElementById('tab-' + t).classList.add('hidden');
+document.getElementById('nav-' + t).classList.remove('active');
+});
 document.getElementById('tab-' + tabName).classList.remove('hidden');
 document.getElementById('nav-' + tabName).classList.add('active');
 }
-// Initiales UI-Update
+// Spiel beim Start laden und UI aktualisieren
+loadGame();
 updateUI();
-
-
