@@ -354,6 +354,10 @@
         }
 
         .tab-btn[hidden] { display: none; }
+        .filter-btn {
+            background-color: #272730; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted);
+            font-size: 0.8rem; padding: 6px 12px; margin-bottom: 10px; cursor: pointer;
+        }
 
         /* Kampfansicht */
         .battle-box { max-width: 560px; }
@@ -427,6 +431,7 @@
         <div class="tab-panel" id="tab-training" hidden>
             <section class="card">
                 <h2 class="card-title">Training & Upgrades</h2>
+                <button type="button" class="filter-btn" id="filter-max"></button>
                 <div class="btn-list" id="training-list"></div>
                 <div class="btn-list" id="upgrade-list" style="margin-top: 12px;"></div>
             </section>
@@ -529,10 +534,10 @@
            regenPerTick: Regeneration pro Tick (optional, nur sinnvoll mit hasMax)
            ================================================================= */
         const RESOURCE_CONFIG = {
-            health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
-            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.25 }, // 1 Energie alle 4 Ticks
+            health: { name: "Gesundheit", hasMax: true, start: 5, max: 5 },
+            energy: { name: "Energie", hasMax: true,  start: 5, max: 5, regenPerTick: 0.25 }, // 1 Energie alle 4 Ticks
             money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 },
-            fame:   { name: "Ruhm",    hasMax: true,  start: 0, max: 20, visible: () => state.resources.fame.current > 0 || usesOf("lodge") > 0 || usesOf("patrol") > 0 }, // wird erst angezeigt, wenn Ruhm vorhanden ist
+            fame:   { name: "Ruhm",    hasMax: true,  start: 0, max: 20, visible: () => state.resources.fame.current > 0 }, // wird erst angezeigt, wenn Ruhm vorhanden ist
             food:   { name: "Essen",   hasMax: true,  start: 5,  max: 20, drainPerTick: 0.05, drainFlag: "foodDrain" } // Verbrauch pro Tick, erst aktiv, wenn state.flags.foodDrain gesetzt ist
         };
 
@@ -673,7 +678,7 @@
         const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
         const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
         const CRIT_MULT = 3;               // Bei einem Crit wird das Ergebnis x3
-        const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
+        const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
         const BASE_ATK = 1;                // Grund-Angriff (+ Items + Ganzkörpertraining)
 
         // Beute-Gegenstände (landen in state.loot und in den Stats)
@@ -713,14 +718,27 @@
         /* ---- Kampf: Gegner und Räume (einfach erweiterbar) ---- */
         const BASE_ATTACK_SPEED = 0.5;   // Angriffe pro Tick (Spieler); Items können "attackSpeed" ergänzen
         const BATTLE_LOG_MAX = 40;
-        const COMBAT_UNLOCK_FAME = 20;
+        const COMBAT_UNLOCK_FAME = 5;
         // enemies: nacheinander zu besiegen; speed = Angriffe pro Tick; Schaden = atk
         const BATTLE_CONFIG = [
             {
                 id: "trainroom",
                 name: "Trainingsraum",
                 desc: "Übe den Kampf an einer Holzpuppe.",
+                visible: () => true,
                 enemies: [ { name: "Holzpuppe", hp: 5, atk: 1, speed: 0.4 } ]
+            },
+            {
+                id: "lodge",
+                name: "Jagdhütte",
+                desc: "Kampf gegen einen lebenden Fuchs. Freigeschaltet nach 20x Jagen.",
+                visible: () => usesOf("hunt") >= 20 && winsOf("lodge") < 1,
+                enemies: [ { name: "Fuchs", hp: 10, atk: 0.5, speed: 0.8 } ],
+                onWin: () => rollLoot([
+                    { chance: 1.0, give: { fame: 10 } },
+                    { chance: 1.0, item: "foxTail", amount: 1 },
+                    { chance: 1.0, item: "herbs",   amount: 1 }
+                ])
             }
         ];
 
@@ -804,7 +822,7 @@
                 tab: "training",
                 name: "Lehre",
                 desc: "Schaltet nach 5 Abschlüssen die Lohnarbeit frei.",
-                visible: () => resMax("health") >= 15 && resMax("energy") >= 15,
+                visible: () => resMax("health") >= 10 && resMax("energy") >= 10,
                 cost: { money: 10 },
                 duration: 10,
                 maxUses: 5,
@@ -867,7 +885,7 @@
                 desc: "Riskant, aber es gibt Beute.",
                 visible: () => usesOf("fullbody") >= activityById("fullbody").maxUses,
                 requires: { atk: 3 },
-                drain: { energy: 1, health: 1 },
+                drain: { energy: 0.6, health: 0.6 },
                 duration: 15,
                 loot: [
                     { chance: 0.5, give: { money: 5 } },
@@ -875,33 +893,22 @@
                     { chance: 1.0, item: "knife", amount: 1 },   // nur 1x findbar (maxOwned)
                     { chance: 0.5, item: "weed",  amount: 1 }
                 ],
-                onComplete: (a, mult) => rollLoot(a.loot, mult),
-                info: () => `Benötigt Angriff 3 (du: ${fmt(atk())}) · Dauer 15 Ticks · -1 Energie/Tick · -1 Gesundheit/Tick`
-            },
-            {
-                id: "lodge",
-                tab: "actions",
-                name: "Jagdhütte",
-                desc: "Kampf gegen einen verletzten Fuchs. Freigeschaltet nach 30x Jagen.",
-                visible: () => usesOf("hunt") >= 30,
-                requires: { maxEnergy: 20 },
-                drain: { health: 1, energy: 2 },
-                duration: 10,
-                maxUses: 1,
-                loot: [
-                    { chance: 1.0, give: { fame: 10 } },
-                    { chance: 1.0, item: "foxTail", amount: 1 },
-                    { chance: 1.0, item: "herbs",   amount: 1 }
-                ],
-                onComplete: (a, mult) => rollLoot(a.loot, mult),
-                info: () => `Benötigt 20 max. Energie (du: ${resMax("energy")}) · Dauer 10 Ticks · -1 Gesundheit/Tick · -2 Energie/Tick · Belohnung: +10 Ruhm`
+                onComplete: (a, mult) => {
+                    let text = rollLoot(a.loot, mult);
+                    if (!state.flags.houseFame) { // einmalig: das Haus macht dich im Dorf bekannt
+                        state.flags.houseFame = true;
+                        text += " · " + rollLoot([{ chance: 1, give: { fame: 5 } }]);
+                    }
+                    return text;
+                },
+                info: () => `Benötigt Angriff 3 (du: ${fmt(atk())}) · Dauer 15 Ticks · -0,6 Energie/Tick · -0,6 Gesundheit/Tick · beim ersten Mal +5 Ruhm`
             },
             {
                 id: "elder",
                 tab: "training",
                 name: "Dem Dorfvorsteher vorsprechen",
                 desc: "Dein Ruhm öffnet dir die Tür. Nach 5 Besuchen schaltet er die Patrouille frei.",
-                visible: () => usesOf("lodge") >= 1,
+                visible: () => winsOf("lodge") >= 1,
                 drain: { energy: 1 },
                 duration: 20,
                 maxUses: 5,
@@ -927,8 +934,8 @@
                 id: "wearTail",
                 tab: "actions",
                 name: "Fuchsschwanz als Talisman tragen",
-                desc: "Ausgerüstet: +5 max. Gesundheit, +3 max. Energie.",
-                visible: () => !!state.flags.foxTailFound,
+                desc: "Ausgerüstet: +5 max. Gesundheit, +3 max. Energie. Entweder-oder: danach kannst du ihn nicht mehr vergraben.",
+                visible: () => !!state.flags.foxTailFound && foxChoiceOpen(),
                 duration: 1,
                 maxUses: 1,
                 noCrit: true,
@@ -945,8 +952,8 @@
                 id: "buryTail",
                 tab: "actions",
                 name: "Fuchsschwanz vergraben",
-                desc: "Bei Vollmond unter einem Baumstamm vergraben – beim Graben findest du etwas.",
-                visible: () => !!state.flags.foxTailFound,
+                desc: "Bei Vollmond unter einem Baumstamm vergraben – beim Graben findest du etwas. Entweder-oder: danach kannst du ihn nicht mehr als Talisman tragen.",
+                visible: () => !!state.flags.foxTailFound && foxChoiceOpen(),
                 drain: { energy: 1 },
                 duration: 10,
                 maxUses: 1,
@@ -1138,6 +1145,7 @@
         }
 
         // Ein Spiel-Tick: Regeneration + alle laufenden Aktivitäten
+        function winsOf(id) { return state.wins[id] || 0; }
         function attackSpeed() { return BASE_ATTACK_SPEED + itemBonus("attackSpeed"); }
         function battleById(id) { return BATTLE_CONFIG.find(b => b.id === id); }
         function combatUnlocked() { return !!state.flags.combatUnlocked || state.resources.fame.current >= COMBAT_UNLOCK_FAME - 1e-9; }
@@ -1189,6 +1197,11 @@
                         state.wins[b.id] = (state.wins[b.id] || 0) + 1;
                         blog(`${cfg.name} abgeschlossen!`);
                         setStatus(`${cfg.name} gewonnen.`);
+                        if (cfg.onWin) {
+                            const loot = cfg.onWin();
+                            if (loot) blog("Beute: " + loot);
+                            checkUnlocks();
+                        }
                     } else {
                         b.enemyHp = enemy().hp;
                         b.eProg = 0;
@@ -1522,7 +1535,13 @@
         function usesOf(id) { return state.uses[id] || 0; }
         function isMaxedActivity(a) { return a.maxUses != null && usesOf(a.id) >= a.maxUses; }
         // Abgeschlossene (maxUses erreicht) Training-/Aktions-Einträge verschwinden; Loop-Aktionen ohne maxUses bleiben
-        function isVisible(a) { return !isMaxedActivity(a) && (!a.visible || a.visible()); }
+        // Entweder-oder beim Fuchsschwanz: sobald eine Option gewählt wurde, verschwinden beide
+        function foxChoiceOpen() { return usesOf("wearTail") === 0 && usesOf("buryTail") === 0; }
+        function isVisible(a) {
+            const ok = !a.visible || a.visible();
+            if (isMaxedActivity(a)) return ok && !!state.flags.showMaxed && (a.tab === "training" || a.tab === "upgrades"); // Filter: Abgeschlossenes anzeigen
+            return ok;
+        }
 
         // Angriff = Grundwert + Items + Ganzkörpertraining
         function atk() {
@@ -1972,6 +1991,8 @@
                 combatList.appendChild(c.btn);
                 ui.combat[bc.id] = c;
             }
+            ui.filterBtn = document.getElementById('filter-max');
+            ui.filterBtn.addEventListener('click', () => { state.flags.showMaxed = !state.flags.showMaxed; updateUI(); saveGame(); });
             ui.battle = document.getElementById('battle');
             ui.bEl = {};
             for (const id of ['battle-room-name', 'battle-room-count', 'b-you-hp', 'b-you-hp-text', 'b-you-atk', 'b-you-atk-text',
@@ -2113,9 +2134,13 @@
         }
 
         function updateMenus() {
+            setText(ui.filterBtn, `Abgeschlossene Trainings/Upgrades: ${state.flags.showMaxed ? "angezeigt" : "ausgeblendet"}`);
             if (ui.combatTab) { const show = combatUnlocked(); if (ui.combatTab.hidden === show) ui.combatTab.hidden = !show; }
             for (const bc of BATTLE_CONFIG) {
                 const c = ui.combat[bc.id];
+                const shown = !bc.visible || bc.visible();
+                if (c.btn.hidden === shown) c.btn.hidden = !shown;
+                if (!shown) continue;
                 const running = !!state.battle && state.battle.id === bc.id && !state.battle.over;
                 const en = bc.enemies.map(e => `${e.name} (${fmt(e.hp)} HP, ${fmt(e.atk)} ATK, ${fmt(e.speed)}/Tick)`).join(", ");
                 setText(c.right, running ? "● Läuft – zurück zum Kampf" : "Start");
@@ -2157,6 +2182,8 @@
                 const c = ui.up[u.id];
                 const cost = upgradeCost(u);
                 const maxed = u.maxLevel != null && upgradeLevel(u.id) >= u.maxLevel;
+                const shownUp = !maxed || !!state.flags.showMaxed;
+                if (c.btn.hidden === shownUp) c.btn.hidden = !shownUp;
                 setText(c.right, maxed ? "Max" : formatResMap(cost));
                 setText(c.extra, u.info());
                 if (c.btn.disabled !== maxed) c.btn.disabled = maxed;
@@ -2318,6 +2345,7 @@
                     if (Number.isInteger(n) && n >= 0 && n <= 1e6) state.wins[b.id] = n;
                 }
             }
+            if (parsed.uses && parsed.uses.lodge > 0 && !state.wins.lodge) state.wins.lodge = 1; // alter Stand: Jagdhütte war eine Aktion
             // Skills
             if (parsed.skills && typeof parsed.skills === 'object') {
                 for (const a of ACTIVITY_CONFIG.filter(x => x.skill)) {
