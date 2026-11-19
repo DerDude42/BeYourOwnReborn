@@ -580,10 +580,10 @@
             {
                 id: "woodstaff",
                 slot: "weapon", category: "Waffe 1-Hand",
-                name: "Holzstab",
+                name: "Speer",
                 desc: "+1 Angriff",
-                unlock: { money: 20 },
-                cost:   { money: 10 },
+                unlock: { money: 30 },
+                cost:   { money: 50 },
                 maxOwned: 1,
                 effects: { atk: 1 }
             },
@@ -684,7 +684,6 @@
         // Beute-Gegenstände (landen in state.loot und in den Stats)
         const LOOT_ITEMS = {
             // maxOwned: so viele kann man höchstens besitzen (weitere Funde verfallen) | value: Verkaufswert je Stück
-            knife: { name: "Rostiges Messer", desc: "+1 Angriff", effects: { atk: 1 }, maxOwned: 1, slot: "weapon", category: "Waffe 1-Hand" },
             weed:  { name: "Unkraut", desc: "Wert 0,5 Gold", maxOwned: 20, value: { money: 0.5 } },
             foxTail: { name: "Fuchsschwanz", desc: "Wert 10 Gold · als Talisman: +5 max. Gesundheit, +3 max. Energie", value: { money: 10 },
                        effects: { maxHealth: 5, maxEnergy: 3 }, slot: "talisman", category: "Talisman", manualEquip: true },
@@ -856,7 +855,8 @@
                 id: "hunt",
                 tab: "actions",
                 name: "Jagen",
-                desc: "Bringt sicher Essen.",
+                desc: "Bringt sicher Essen. Freigeschaltet mit dem Küchenmesser.",
+                visible: () => (state.inventory.kitchenKnife || 0) > 0 || usesOf("hunt") > 0,
                 drain: { health: 0.8, energy: 0.8 },
                 drainBonus: { health: "huntHealthSave", energy: "huntEnergySave" },
                 duration: 5,
@@ -890,7 +890,6 @@
                 loot: [
                     { chance: 0.5, give: { money: 5 } },
                     { chance: 0.7, give: { food: 2 } },
-                    { chance: 1.0, item: "knife", amount: 1 },   // nur 1x findbar (maxOwned)
                     { chance: 0.5, item: "weed",  amount: 1 }
                 ],
                 onComplete: (a, mult) => {
@@ -909,10 +908,10 @@
                 name: "Dem Dorfvorsteher vorsprechen",
                 desc: "Dein Ruhm öffnet dir die Tür. Nach 5 Besuchen schaltet er die Patrouille frei.",
                 visible: () => winsOf("lodge") >= 1,
-                drain: { energy: 1 },
+                drain: { energy: 0.5 },
                 duration: 20,
                 maxUses: 5,
-                info: () => `Level ${usesOf("elder")}/5 · -1 Energie/Tick (20 Energie je Besuch) · Dauer 20 Ticks`
+                info: () => `Level ${usesOf("elder")}/5 · -0,5 Energie/Tick (10 Energie je Besuch) · Dauer 20 Ticks`
             },
             {
                 id: "patrol",
