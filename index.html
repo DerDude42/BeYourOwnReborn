@@ -469,7 +469,7 @@
            ================================================================= */
         const RESOURCE_CONFIG = {
             health: { name: "Gesundheit", hasMax: true, start: 10, max: 10 },
-            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.2 }, // 1 Energie alle 5 Ticks
+            energy: { name: "Energie", hasMax: true,  start: 10, max: 10, regenPerTick: 0.25 }, // 1 Energie alle 4 Ticks
             money:  { name: "Gold",    hasMax: true,  start: 0,  max: 20 },
             fame:   { name: "Ruhm",    hasMax: true,  start: 0, max: 20, visible: () => state.resources.fame.current > 0 || usesOf("lodge") > 0 || usesOf("patrol") > 0 }, // wird erst angezeigt, wenn Ruhm vorhanden ist
             food:   { name: "Essen",   hasMax: true,  start: 5,  max: 20, drainPerTick: 0.05, drainFlag: "foodDrain" } // Verbrauch pro Tick, erst aktiv, wenn state.flags.foodDrain gesetzt ist
@@ -480,7 +480,7 @@
                 id: "beg",
                 name: "Betteln",
                 desc: "Bitte Passanten um eine kleine Münze.",
-                cost:   { energy: 2 },
+                cost:   { energy: 1 },
                 reward: { money: 1 },
                 bonus:  { money: "begBonus" } // zusätzlich itemBonus("begBonus")
             }
@@ -536,7 +536,7 @@
                 name: "T-Shirt",
                 desc: "Wärmt und schützt beim Jagen vor Kratzern: -0,2 Gesundheit/Tick weniger beim Jagen",
                 unlock: { money: 25 },
-                cost:   { money: 15 },
+                cost:   { money: 18 },
                 maxOwned: 1,
                 effects: { huntHealthSave: 0.2 }
             },
@@ -556,7 +556,7 @@
                 name: "Schuhe",
                 desc: "Jagen: -0,3 Gesundheit/Tick · +2 max. Energie",
                 unlock: { money: 25 },
-                cost:   { money: 30 },
+                cost:   { money: 35 },
                 maxOwned: 1,
                 effects: { huntHealthSave: 0.3, maxEnergy: 2 }
             },
@@ -576,7 +576,7 @@
                 name: "Löchrige Handschuhe",
                 desc: "+3 max. Energie",
                 unlock: { money: 15 },
-                cost:   { money: 10 },
+                cost:   { money: 12 },
                 maxOwned: 1,
                 effects: { maxEnergy: 3 }
             },
@@ -607,7 +607,7 @@
         const MEDITATION_BASE_MULT = 1.05; // Regenerations-Multiplikator der Meditation
         const MIND_UPGRADE_FACTOR = 1.10;  // "Geist trainieren": Multiplikator x1,10 pro Level
         const MEDITATION_FLAT_REGEN = 1;  // fixe Energie pro Tick, solange Meditation läuft (zusätzlich zum Multiplikator)
-        const SLEEP_ENERGY_GAIN = 0.5;     // Energie pro Tick beim Schlafen
+        const SLEEP_ENERGY_GAIN = 0.8;     // Energie pro Tick beim Schlafen
         const FORCED_SLEEP_TICKS = 5;      // Zwangsschlaf bei 0 Gesundheit: so viele Ticks mit reduzierter Erholung
         const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
         const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
@@ -703,13 +703,13 @@
                 tab: "training",
                 name: "Ganzkörpertraining",
                 desc: "Pro Level: +0,2 Angriff, +1 max. Gesundheit, +1 max. Energie.",
-                cost: { money: 5 },
+                cost: { money: 6 },
                 drain: { energy: 0.5 },
                 duration: 10,
                 maxUses: 5,
                 atkPerUse: 0.2,
                 levelBonus: { health: 1, energy: 1 },
-                info: () => `Level ${usesOf("fullbody")}/5 · Kosten: 5 Gold · -0,5 Energie/Tick · Dauer 10 Ticks`
+                info: () => `Level ${usesOf("fullbody")}/5 · Kosten: 6 Gold · -0,5 Energie/Tick · Dauer 10 Ticks`
             },
             {
                 id: "sparring",
@@ -753,18 +753,18 @@
                 name: "Küchenhilfe",
                 desc: "Hilft in der Küche und bringt Essen. Muss nach jedem Abschluss neu gestartet werden.",
                 visible: () => (state.inventory.kitchenKnife || 0) > 0,
-                drain: { energy: 2 },
+                drain: { energy: 1 },
                 duration: 10,
                 gain: () => ({ food: 0.2 + statBonus("kitchenFood") }),
-                onComplete: () => rollLoot([{ chance: 1, give: { money: 2 } }]),
-                info: () => `Dauer 10 Ticks · +${fmt(0.2 + statBonus("kitchenFood"))} Essen/Tick · -2 Energie/Tick · +2 Gold bei Abschluss · ${usesOf("kitchen")}x abgeschlossen`
+                onComplete: () => rollLoot([{ chance: 1, give: { money: 4 } }]),
+                info: () => `Dauer 10 Ticks · +${fmt(0.2 + statBonus("kitchenFood"))} Essen/Tick · -1 Energie/Tick · +4 Gold bei Abschluss · ${usesOf("kitchen")}x abgeschlossen`
             },
             {
                 id: "hunt",
                 tab: "actions",
                 name: "Jagen",
                 desc: "Bringt sicher Essen.",
-                drain: { health: 1, energy: 1 },
+                drain: { health: 0.8, energy: 0.8 },
                 drainBonus: { health: "huntHealthSave", energy: "huntEnergySave" },
                 duration: 5,
                 onComplete: (a, mult) => rollLoot([{ chance: 1, give: { food: 1 + statBonus("huntFood") } }], mult),
