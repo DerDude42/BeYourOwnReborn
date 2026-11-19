@@ -353,6 +353,35 @@
             padding: 16px; width: 100%; max-width: 420px; max-height: 80vh; overflow-y: auto;
         }
 
+        .tab-btn[hidden] { display: none; }
+
+        /* Kampfansicht */
+        .battle-box { max-width: 560px; }
+        .battle-top { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+        .battle-room {
+            flex: 1; display: flex; justify-content: space-between; padding: 8px 12px;
+            background: rgba(224, 90, 90, 0.35); border: 1px solid var(--border); border-radius: 8px; font-weight: bold;
+        }
+        .battle-top button, .battle-actions button {
+            background-color: #272730; border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text-main); min-height: 40px; padding: 0 14px; cursor: pointer;
+        }
+        .battle-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .battle-name { font-weight: bold; margin-bottom: 4px; }
+        .bar {
+            position: relative; height: 30px; margin-bottom: 6px; overflow: hidden;
+            background: #2c2c34; border: 1px solid var(--border); border-radius: 6px;
+        }
+        .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; transition: width 0.2s linear; }
+        .bar.hp .bar-fill { background: rgba(224, 90, 90, 0.75); }
+        .bar.atk .bar-fill { background: rgba(160, 160, 170, 0.45); transition: none; }
+        .bar > span { position: relative; display: block; text-align: center; line-height: 30px; font-size: 0.85rem; }
+        .battle-log {
+            margin-top: 12px; height: 160px; overflow-y: auto; padding: 8px; white-space: pre-wrap;
+            background: #1b1b22; border: 1px solid var(--border); border-radius: 8px; font-size: 0.82rem; color: var(--text-muted);
+        }
+        .battle-actions { margin-top: 10px; display: flex; justify-content: flex-end; }
+
         .res-group { flex-wrap: wrap; gap: 6px; }
         .res-box { padding: 5px 9px; font-size: 0.85rem; }
 
@@ -403,6 +432,13 @@
             </section>
         </div>
 
+        <div class="tab-panel" id="tab-combat" hidden>
+            <section class="card">
+                <h2 class="card-title">Kampf</h2>
+                <div class="btn-list" id="combat-list"></div>
+            </section>
+        </div>
+
         <div class="tab-panel" id="tab-inventory" hidden>
             <section class="card">
                 <h2 class="card-title">Ausrüstung</h2>
@@ -448,9 +484,34 @@
     <nav id="tabbar">
         <button type="button" class="tab-btn active" data-tab="actions">Aktionen</button>
         <button type="button" class="tab-btn" data-tab="training">Training</button>
+        <button type="button" class="tab-btn" data-tab="combat" id="tab-btn-combat" hidden>Kampf</button>
         <button type="button" class="tab-btn" data-tab="inventory">Inventar</button>
         <button type="button" class="tab-btn" data-tab="stats">Stats</button>
     </nav>
+
+    <div id="battle" class="picker" hidden>
+        <div class="picker-box battle-box">
+            <div class="battle-top">
+                <div class="battle-room"><span id="battle-room-name"></span><span id="battle-room-count"></span></div>
+                <button type="button" id="battle-quit">Beenden</button>
+                <button type="button" id="battle-back">Zurück</button>
+            </div>
+            <div class="battle-grid">
+                <div>
+                    <div class="battle-name">Du</div>
+                    <div class="bar hp"><div class="bar-fill" id="b-you-hp"></div><span id="b-you-hp-text"></span></div>
+                    <div class="bar atk"><div class="bar-fill" id="b-you-atk"></div><span id="b-you-atk-text"></span></div>
+                </div>
+                <div>
+                    <div class="battle-name" id="b-enemy-name"></div>
+                    <div class="bar hp"><div class="bar-fill" id="b-enemy-hp"></div><span id="b-enemy-hp-text"></span></div>
+                    <div class="bar atk"><div class="bar-fill" id="b-enemy-atk"></div><span id="b-enemy-atk-text"></span></div>
+                </div>
+            </div>
+            <div class="battle-log" id="battle-log"></div>
+            <div class="battle-actions"><button type="button" id="battle-again" hidden>Nochmal</button></div>
+        </div>
+    </div>
 
     <div id="picker" class="picker" hidden>
         <div class="picker-box">
@@ -612,7 +673,7 @@
         const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
         const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
         const CRIT_MULT = 3;               // Bei einem Crit wird das Ergebnis x3
-        const FLAGS = ["foodDrain", "foxTailFound"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
+        const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
         const BASE_ATK = 1;                // Grund-Angriff (+ Items + Ganzkörpertraining)
 
         // Beute-Gegenstände (landen in state.loot und in den Stats)
@@ -648,6 +709,20 @@
         for (const [id, it] of Object.entries(LOOT_ITEMS)) {
             if (it.slot) GEAR[id] = { id, name: it.name, desc: it.desc, slot: it.slot, category: it.category, effects: it.effects || {}, source: "loot", manual: !!it.manualEquip };
         }
+
+        /* ---- Kampf: Gegner und Räume (einfach erweiterbar) ---- */
+        const BASE_ATTACK_SPEED = 0.5;   // Angriffe pro Tick (Spieler); Items können "attackSpeed" ergänzen
+        const BATTLE_LOG_MAX = 40;
+        const COMBAT_UNLOCK_FAME = 20;
+        // enemies: nacheinander zu besiegen; speed = Angriffe pro Tick; Schaden = atk
+        const BATTLE_CONFIG = [
+            {
+                id: "trainroom",
+                name: "Trainingsraum",
+                desc: "Übe den Kampf an einer Holzpuppe.",
+                enemies: [ { name: "Holzpuppe", hp: 5, atk: 1, speed: 0.4 } ]
+            }
+        ];
 
         /* ---- Skills (Meditation, Ausruhen): 1 Tick Ausführung = 1 XP ---- */
         const SKILL_BASE_NEED = 100;        // Ausführungen für Level 1
@@ -918,6 +993,7 @@
             { label: "Dorfvorsteher",       get: () => `${usesOf("elder")}/${activityById("elder").maxUses}` },
             { label: "Lehre",                get: () => `${usesOf("apprentice")}/${activityById("apprentice").maxUses}` },
             { label: "Angriff",              get: () => `${fmt(atk())}` },
+            { label: "Angriffsgeschwindigkeit", get: () => `${fmt(attackSpeed())}/Tick` },
             { label: "Essen",                get: () => `${Math.floor(state.resources.food.current + 1e-9)}/${resMax("food")}` + (passiveDrainOf("food") > 0 ? ` (-${fmt(passiveDrainOf("food"))}/Tick)` : "") },
             { label: "Crit-Chance",          get: () => `${fmt(critChance() * 100, 0)} % (Ergebnis x${CRIT_MULT})` }
         ];
@@ -949,6 +1025,8 @@
             state.loot = {};       // Beute-Items: ID -> Anzahl
             state.flags = {};      // freigeschaltete Schalter (siehe FLAGS)
             state.equipped = {};   // Slot -> ausgerüstete Item-ID
+            state.battle = null;   // laufender Kampf (nicht gespeichert)
+            state.wins = {};       // Kampf-ID -> Siege
             state.skills = {};     // Skill-ID -> { level, xp }
             state.ticksPerSec = BASE_TICKS_PER_SEC; // Spielgeschwindigkeit (Regler in den Stats)
             for (const u of UPGRADE_CONFIG) state.upgrades[u.id] = 0;
@@ -983,6 +1061,7 @@
             lastTick = Date.now();
             try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignorieren */ }
             if (ui.sellQty) ui.sellQty = {};
+            if (ui.battle) ui.battle.hidden = true;
             saveGame();
             updateUI();
             showTab('actions');
@@ -1059,6 +1138,80 @@
         }
 
         // Ein Spiel-Tick: Regeneration + alle laufenden Aktivitäten
+        function attackSpeed() { return BASE_ATTACK_SPEED + itemBonus("attackSpeed"); }
+        function battleById(id) { return BATTLE_CONFIG.find(b => b.id === id); }
+        function combatUnlocked() { return !!state.flags.combatUnlocked || state.resources.fame.current >= COMBAT_UNLOCK_FAME - 1e-9; }
+        function blog(msg) {
+            const b = state.battle;
+            if (!b) return;
+            b.log.push(msg);
+            if (b.log.length > BATTLE_LOG_MAX) b.log.shift();
+        }
+        function stopBattle() {
+            state.battle = null;
+            if (ui.battle) ui.battle.hidden = true;
+        }
+        function startBattle(id) {
+            const cfg = battleById(id);
+            if (!cfg) return;
+            tick();
+            if (state.resources.health.current <= 1e-9) { showToast("Zu wenig Gesundheit für einen Kampf"); return; }
+            for (const other of [...state.active]) stopActivity(other);
+            state.battle = { id, idx: 0, enemyHp: cfg.enemies[0].hp, pProg: 0, eProg: 0, log: [], over: false, result: "" };
+            blog(`Du betrittst: ${cfg.name}.`);
+            blog(`${cfg.enemies[0].name} erscheint.`);
+            ui.battle.hidden = false;
+            updateUI();
+        }
+        function onBattleClick(id) {
+            if (state.battle && state.battle.id === id && !state.battle.over) { ui.battle.hidden = false; updateUI(); return; }
+            startBattle(id);
+        }
+        // Ein Kampf-Tick: Spieler und Gegner sammeln Angriffsfortschritt (Angriffe/Tick) und schlagen bei >= 1 zu
+        function battleTick() {
+            const b = state.battle;
+            if (!b || b.over) return;
+            const cfg = battleById(b.id);
+            const enemy = () => cfg.enemies[b.idx];
+
+            b.pProg += attackSpeed();
+            while (b.pProg >= 1 && !b.over) {
+                b.pProg -= 1;
+                const dmg = atk();
+                b.enemyHp = Math.max(0, b.enemyHp - dmg);
+                blog(`Du greifst ${enemy().name} an: ${fmt(dmg)} Schaden.`);
+                if (b.enemyHp <= 1e-9) {
+                    blog(`${enemy().name} besiegt!`);
+                    b.idx += 1;
+                    if (b.idx >= cfg.enemies.length) {
+                        b.over = true;
+                        b.result = "win";
+                        state.wins[b.id] = (state.wins[b.id] || 0) + 1;
+                        blog(`${cfg.name} abgeschlossen!`);
+                        setStatus(`${cfg.name} gewonnen.`);
+                    } else {
+                        b.enemyHp = enemy().hp;
+                        b.eProg = 0;
+                        blog(`${enemy().name} erscheint.`);
+                    }
+                }
+            }
+            if (b.over) { b.idx = Math.min(b.idx, cfg.enemies.length - 1); return; }
+
+            b.eProg += enemy().speed;
+            while (b.eProg >= 1 && !b.over) {
+                b.eProg -= 1;
+                const hp = state.resources.health;
+                hp.current = Math.max(0, hp.current - enemy().atk);
+                blog(`${enemy().name} trifft dich: ${fmt(enemy().atk)} Schaden.`);
+                if (hp.current <= 1e-9) {
+                    b.over = true;
+                    b.result = "lose";
+                    blog("Du wurdest besiegt und musst dich ausruhen.");
+                }
+            }
+        }
+
         function gameTick() {
             regenerate(1, regenMult());
             if (regenFlat() > 0) state.resources.energy.current = clampRes("energy", state.resources.energy.current + regenFlat());
@@ -1073,6 +1226,7 @@
                 const activity = activityById(id);
                 if (activity) runActivity(activity);
             }
+            if (state.battle) battleTick();
             if (state.resources.health.current <= 1e-9 && !isActive("sleep")) forceSleep();
         }
 
@@ -1095,6 +1249,7 @@
             }
 
             for (const other of [...state.active]) stopActivity(other); // Betteln beendet z. B. die Meditation
+            if (state.battle) stopBattle();
             for (const [resKey, amount] of Object.entries(cost)) {
                 state.resources[resKey].current -= amount;
             }
@@ -1116,6 +1271,7 @@
         // Schaltet Items frei, deren Gold-Schwelle erreicht wurde (bleibt dauerhaft freigeschaltet)
         function checkUnlocks() {
             if ((state.loot.foxTail || 0) > 0) state.flags.foxTailFound = true;
+            if (state.resources.fame.current >= COMBAT_UNLOCK_FAME - 1e-9) state.flags.combatUnlocked = true;
             for (const item of ITEM_CONFIG) {
                 const reached = item.unlockWhen ? item.unlockWhen() : canAfford(item.unlock);
                 if (!state.unlocked.includes(item.id) && reached) {
@@ -1525,6 +1681,7 @@
                 }
             }
             for (const other of [...state.active]) stopActivity(other);
+            if (state.battle) stopBattle();
             state.runTicks[activity.id] = state.runTicks[activity.id] || 0;
             state.active.push(activity.id);
         }
@@ -1805,6 +1962,27 @@
                 ui.act[a.id] = c;
             }
 
+            // Kampf-Tab und Kampfansicht
+            ui.combat = {};
+            ui.combatTab = document.getElementById('tab-btn-combat');
+            const combatList = document.getElementById('combat-list');
+            for (const bc of BATTLE_CONFIG) {
+                const c = createCardButton(bc.name, () => onBattleClick(bc.id), 'btn-reward');
+                c.desc.textContent = bc.desc;
+                combatList.appendChild(c.btn);
+                ui.combat[bc.id] = c;
+            }
+            ui.battle = document.getElementById('battle');
+            ui.bEl = {};
+            for (const id of ['battle-room-name', 'battle-room-count', 'b-you-hp', 'b-you-hp-text', 'b-you-atk', 'b-you-atk-text',
+                              'b-enemy-name', 'b-enemy-hp', 'b-enemy-hp-text', 'b-enemy-atk', 'b-enemy-atk-text', 'battle-log', 'battle-again']) {
+                ui.bEl[id] = document.getElementById(id);
+            }
+            document.getElementById('battle-back').addEventListener('click', () => { ui.battle.hidden = true; });
+            document.getElementById('battle-quit').addEventListener('click', () => { stopBattle(); updateUI(); });
+            ui.bEl['battle-again'].addEventListener('click', () => { if (state.battle) startBattle(state.battle.id); });
+            ui.battleLogText = "";
+
             // Inventar: Zeile je Shop-Item und Beute-Item, sichtbar sobald im Besitz
             ui.inv = [];
             const invList = document.getElementById('inventory-list');
@@ -1905,7 +2083,46 @@
             }
         }
 
+        function updateBattleView() {
+            const b = state.battle;
+            if (!b) { if (!ui.battle.hidden) ui.battle.hidden = true; return; }
+            if (ui.battle.hidden) return;
+            const cfg = battleById(b.id);
+            const enemy = cfg.enemies[Math.min(b.idx, cfg.enemies.length - 1)];
+            const E = ui.bEl;
+            const hp = state.resources.health.current, maxHp = resMax("health");
+            const pct = (v) => Math.max(0, Math.min(100, v * 100)).toFixed(1) + '%';
+            setText(E['battle-room-name'], cfg.name);
+            setText(E['battle-room-count'], `${Math.min(b.over && b.result === "win" ? cfg.enemies.length : b.idx + 1, cfg.enemies.length)} / ${cfg.enemies.length}`);
+            setText(E['b-enemy-name'], enemy.name);
+            E['b-you-hp'].style.width = pct(hp / maxHp);
+            setText(E['b-you-hp-text'], `${fmt(hp)} / ${fmt(maxHp)}`);
+            E['b-enemy-hp'].style.width = pct(b.enemyHp / enemy.hp);
+            setText(E['b-enemy-hp-text'], `${fmt(b.enemyHp)} / ${fmt(enemy.hp)}`);
+            E['b-you-atk'].style.width = pct(b.pProg);
+            setText(E['b-you-atk-text'], `Angriff x${fmt(atk())} · ${fmt(attackSpeed())}/Tick`);
+            E['b-enemy-atk'].style.width = pct(b.eProg);
+            setText(E['b-enemy-atk-text'], `Schlag x${fmt(enemy.atk)} · ${fmt(enemy.speed)}/Tick`);
+            E['battle-again'].hidden = !b.over;
+            const text = b.log.join("\n");
+            if (text !== ui.battleLogText) {
+                ui.battleLogText = text;
+                E['battle-log'].textContent = text;
+                E['battle-log'].scrollTop = E['battle-log'].scrollHeight;
+            }
+        }
+
         function updateMenus() {
+            if (ui.combatTab) { const show = combatUnlocked(); if (ui.combatTab.hidden === show) ui.combatTab.hidden = !show; }
+            for (const bc of BATTLE_CONFIG) {
+                const c = ui.combat[bc.id];
+                const running = !!state.battle && state.battle.id === bc.id && !state.battle.over;
+                const en = bc.enemies.map(e => `${e.name} (${fmt(e.hp)} HP, ${fmt(e.atk)} ATK, ${fmt(e.speed)}/Tick)`).join(", ");
+                setText(c.right, running ? "● Läuft – zurück zum Kampf" : "Start");
+                setText(c.extra, ` · Gegner: ${en} · Siege: ${state.wins[bc.id] || 0}`);
+                c.btn.classList.toggle('running', running);
+            }
+            updateBattleView();
             let exploreVisible = false;
             for (const a of ACTIVITY_CONFIG) {
                 const c = ui.act[a.id];
@@ -2023,6 +2240,7 @@
                 ticksPerSec: state.ticksPerSec,
                 flags: { ...state.flags },
                 equipped: { ...state.equipped },
+                wins: { ...state.wins },
                 skills: JSON.parse(JSON.stringify(state.skills))
             };
             for (const key of Object.keys(RESOURCE_CONFIG)) {
@@ -2092,6 +2310,13 @@
 
             if (parsed.flags && typeof parsed.flags === 'object') {
                 for (const f of FLAGS) if (parsed.flags[f] === true) state.flags[f] = true;
+            }
+            // Kampf-Siege
+            if (parsed.wins && typeof parsed.wins === 'object') {
+                for (const b of BATTLE_CONFIG) {
+                    const n = parsed.wins[b.id];
+                    if (Number.isInteger(n) && n >= 0 && n <= 1e6) state.wins[b.id] = n;
+                }
             }
             // Skills
             if (parsed.skills && typeof parsed.skills === 'object') {
