@@ -354,6 +354,10 @@
         }
 
         .tab-btn[hidden] { display: none; }
+        .bestiary-entry { padding: 8px 0; border-bottom: 1px solid var(--border); }
+        .bestiary-entry:last-child { border-bottom: none; }
+        .bestiary-name { font-weight: bold; }
+        .bestiary-info { color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }
         .filter-btn {
             background-color: #272730; border: 1px solid var(--border); border-radius: 8px; color: var(--text-muted);
             font-size: 0.8rem; padding: 6px 12px; margin-bottom: 10px; cursor: pointer;
@@ -442,6 +446,22 @@
                 <h2 class="card-title">Kampf</h2>
                 <div class="btn-list" id="combat-list"></div>
             </section>
+            <section class="card">
+                <h2 class="card-title">Bestiarium</h2>
+                <div id="bestiary-list"></div>
+            </section>
+        </div>
+
+        <div class="tab-panel" id="tab-pets" hidden>
+            <section class="card">
+                <h2 class="card-title">Brutstätte</h2>
+                <div class="btn-list" id="incubator-list"></div>
+            </section>
+            <section class="card">
+                <h2 class="card-title">Pets</h2>
+                <p class="btn-desc" id="pet-empty">Noch kein Pet geschlüpft.</p>
+                <div class="btn-list" id="pet-list"></div>
+            </section>
         </div>
 
         <div class="tab-panel" id="tab-inventory" hidden>
@@ -490,6 +510,7 @@
         <button type="button" class="tab-btn active" data-tab="actions">Aktionen</button>
         <button type="button" class="tab-btn" data-tab="training">Training</button>
         <button type="button" class="tab-btn" data-tab="combat" id="tab-btn-combat" hidden>Kampf</button>
+        <button type="button" class="tab-btn" data-tab="pets" id="tab-btn-pets" hidden>Pets</button>
         <button type="button" class="tab-btn" data-tab="inventory">Inventar</button>
         <button type="button" class="tab-btn" data-tab="stats">Stats</button>
     </nav>
@@ -506,6 +527,7 @@
                     <div class="battle-name">Du</div>
                     <div class="bar hp"><div class="bar-fill" id="b-you-hp"></div><span id="b-you-hp-text"></span></div>
                     <div class="bar atk"><div class="bar-fill" id="b-you-atk"></div><span id="b-you-atk-text"></span></div>
+                    <div class="bar atk" id="b-pet-bar" hidden><div class="bar-fill" id="b-pet-atk"></div><span id="b-pet-atk-text"></span></div>
                 </div>
                 <div>
                     <div class="battle-name" id="b-enemy-name"></div>
@@ -547,7 +569,7 @@
                 name: "Betteln",
                 desc: "Bitte Passanten um eine kleine Münze.",
                 cost:   { energy: 1 },
-                reward: { money: 1 },
+                reward: { money: 0.5 },
                 bonus:  { money: "begBonus" } // zusätzlich itemBonus("begBonus")
             }
         ];
@@ -558,15 +580,6 @@
         // maxOwned: maximale Anzahl, die man besitzen kann (null = unbegrenzt)
         // effects: dauerhafte Boni, die mit itemBonus(name) abgefragt werden
         const ITEM_CONFIG = [
-            {
-                id: "purse",
-                name: "Geldbörse",
-                desc: "+30 max. Gold",
-                unlock: { money: 10 },
-                cost:   { money: 5 },
-                maxOwned: 1,
-                effects: { maxMoney: 30 }
-            },
             {
                 id: "pants",
                 slot: "legs", category: "Beine",
@@ -650,11 +663,19 @@
                 id: "kitchenKnife",
                 slot: "weapon", category: "Waffe 1-Hand",
                 name: "Küchenmesser",
-                desc: "+2 Angriff · schaltet die Loop-Aktion Küchenhilfe frei",
+                desc: "+2 Angriff",
                 unlock: { money: 25 },
                 cost:   { money: 30 },
                 maxOwned: 1,
                 effects: { atk: 2 }
+            },
+            {
+                id: "apron",
+                name: "Schürze",
+                desc: "Schaltet die Loop-Aktion Küchenhilfe frei",
+                unlock: { money: 10 },
+                cost:   { money: 15 },
+                maxOwned: 1
             },
             {
                 id: "chefHat",
@@ -670,15 +691,13 @@
 
         /* ---- Grundwerte ---- */
         const BASE_ACTION_POINTS = 1;      // so viele Aktivitäten laufen gleichzeitig
-        const MEDITATION_BASE_MULT = 1.05; // Regenerations-Multiplikator der Meditation
-        const MIND_UPGRADE_FACTOR = 1.10;  // "Geist trainieren": Multiplikator x1,10 pro Level
         const MEDITATION_FLAT_REGEN = 1;  // fixe Energie pro Tick, solange Meditation läuft (zusätzlich zum Multiplikator)
         const SLEEP_ENERGY_GAIN = 0.8;     // Energie pro Tick beim Schlafen
         const FORCED_SLEEP_TICKS = 5;      // Zwangsschlaf bei 0 Gesundheit: so viele Ticks mit reduzierter Erholung
         const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
         const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
         const CRIT_MULT = 3;               // Bei einem Crit wird das Ergebnis x3
-        const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
+        const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
         const BASE_ATK = 1;                // Grund-Angriff (+ Items + Ganzkörpertraining)
 
         // Beute-Gegenstände (landen in state.loot und in den Stats)
@@ -688,6 +707,8 @@
             foxTail: { name: "Fuchsschwanz", desc: "Wert 10 Gold · als Talisman: +5 max. Gesundheit, +3 max. Energie", value: { money: 10 },
                        effects: { maxHealth: 5, maxEnergy: 3 }, slot: "talisman", category: "Talisman", manualEquip: true },
             helm:    { name: "Helm", desc: "+10 max. Gesundheit · +0,1 Gesundheit/Tick", effects: { maxHealth: 10, healthRegen: 0.1 }, maxOwned: 1, slot: "head", category: "Kopf" },
+            eggSmall:   { name: "Kleines Ei",    desc: "Im Reiter Pets ausbrüten", maxOwned: 1 },
+            eggSpotted: { name: "Geflecktes Ei", desc: "Im Reiter Pets ausbrüten", maxOwned: 1 },
             amulet:  { name: "Amulett", desc: "+0,2 Energie-Regeneration", effects: { energyRegen: 0.2 }, maxOwned: 1, slot: "neck", category: "Amulett" },
             herbs:   { name: "Kräuter", desc: "Wert 1 Gold", value: { money: 1 } }
         };
@@ -714,6 +735,13 @@
             if (it.slot) GEAR[id] = { id, name: it.name, desc: it.desc, slot: it.slot, category: it.category, effects: it.effects || {}, source: "loot", manual: !!it.manualEquip };
         }
 
+        /* ---- Pets: schlüpfen aus Eiern (Beute), ein aktives Pet gibt Boni und kämpft mit ---- */
+        // egg: ID des Ei-Items in LOOT_ITEMS · hatchTicks: Brutdauer · effects: Boni, solange das Pet aktiv ist · atk/speed: Kampfwerte
+        const PET_CONFIG = [
+            { id: "chick",  name: "Küken",    egg: "eggSmall",   hatchTicks: 40, effects: { maxEnergy: 1 }, atk: 0.3, speed: 0.5, desc: "+1 max. Energie" },
+            { id: "lizard", name: "Eidechse", egg: "eggSpotted", hatchTicks: 80, effects: { maxHealth: 2 }, atk: 0.5, speed: 0.6, desc: "+2 max. Gesundheit" }
+        ];
+
         /* ---- Kampf: Gegner und Räume (einfach erweiterbar) ---- */
         const BASE_ATTACK_SPEED = 0.5;   // Angriffe pro Tick (Spieler); Items können "attackSpeed" ergänzen
         const BATTLE_LOG_MAX = 40;
@@ -733,18 +761,19 @@
                 desc: "Kampf gegen einen lebenden Fuchs. Freigeschaltet nach 20x Jagen.",
                 visible: () => usesOf("hunt") >= 20 && winsOf("lodge") < 1,
                 enemies: [ { name: "Fuchs", hp: 10, atk: 0.5, speed: 0.8 } ],
-                onWin: () => rollLoot([
+                loot: [
                     { chance: 1.0, give: { fame: 10 } },
                     { chance: 1.0, item: "foxTail", amount: 1 },
-                    { chance: 1.0, item: "herbs",   amount: 1 }
-                ])
+                    { chance: 1.0, item: "herbs",   amount: 1 },
+                    { chance: 1.0, item: "eggSpotted", amount: 1, when: () => petFree("lizard") }
+                ],
+                onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === "lodge").loot)
             }
         ];
 
         /* ---- Skills (Meditation, Ausruhen): 1 Tick Ausführung = 1 XP ---- */
         const SKILL_BASE_NEED = 100;        // Ausführungen für Level 1
         const SKILL_NEED_GROWTH = 1.15;     // Bedarf steigt je Level um 15 %
-        const SKILL_SPEED_PER_LEVEL = 0.005; // +0,5 % Wirkung pro Level
 
         /* ---- Tick-System: 1 Tick = eine Spiel-Runde; Basis ist 1 Tick pro Sekunde ---- */
         const BASE_TICKS_PER_SEC = 1;
@@ -766,10 +795,10 @@
                 id: "meditation",
                 tab: "loop",
                 name: "Meditation",
-                desc: "Vervielfacht die Energie-Regeneration und gibt zusätzlich fix +1 Energie pro Tick. Freigeschaltet, wenn Geist trainieren Level 5 erreicht hat.",
+                desc: "Gibt fix +1 Energie pro Tick. Freigeschaltet, wenn Geist trainieren Level 5 erreicht hat.",
                 visible: () => upgradeLevel("mind") >= 5,
                 skill: true,
-                info: () => `${skillText("meditation")} · Regeneration x${fmt(regenMultOf("meditation"), 3)} · +${MEDITATION_FLAT_REGEN} Energie/Tick fix`
+                info: () => `${skillText("meditation")} · +${MEDITATION_FLAT_REGEN} Energie/Tick fix`
             },
             {
                 id: "sleep",
@@ -778,12 +807,12 @@
                 desc: "Erholt Gesundheit und Energie.",
                 skill: true,
                 gain: () => {
-                    const f = sleepFactor() * skillSpeed("sleep");
+                    const f = sleepFactor();
                     return { health: (1 + itemBonus("sleepBonus")) * f, energy: SLEEP_ENERGY_GAIN * f };
                 },
                 onTick: () => { if (state.forcedSleepTicks > 0) state.forcedSleepTicks--; },
                 info: () => {
-                    const f = sleepFactor() * skillSpeed("sleep");
+                    const f = sleepFactor();
                     const text = `${skillText("sleep")} · +${fmt((1 + itemBonus("sleepBonus")) * f)} Gesundheit/Tick · +${fmt(SLEEP_ENERGY_GAIN * f)} Energie/Tick`;
                     return state.forcedSleepTicks > 0
                         ? `${text} · erschöpft: noch ${state.forcedSleepTicks} Ticks mit ${fmt(FORCED_SLEEP_FACTOR * 100, 0)} %`
@@ -844,7 +873,7 @@
                 tab: "loop",
                 name: "Küchenhilfe",
                 desc: "Hilft in der Küche und bringt Essen. Muss nach jedem Abschluss neu gestartet werden.",
-                visible: () => (state.inventory.kitchenKnife || 0) > 0,
+                visible: () => (state.inventory.apron || 0) > 0 || usesOf("kitchen") > 0,
                 drain: { energy: 1 },
                 duration: 10,
                 gain: () => ({ food: 0.2 + statBonus("kitchenFood") }),
@@ -890,7 +919,8 @@
                 loot: [
                     { chance: 0.5, give: { money: 5 } },
                     { chance: 0.7, give: { food: 2 } },
-                    { chance: 0.5, item: "weed",  amount: 1 }
+                    { chance: 0.5, item: "weed",  amount: 1 },
+                    { chance: 0.3, item: "eggSmall", amount: 1, when: () => petFree("chick") }
                 ],
                 onComplete: (a, mult) => {
                     let text = rollLoot(a.loot, mult);
@@ -970,15 +1000,22 @@
         // baseCost wächst pro Level um costFactor
         const UPGRADE_CONFIG = [
             {
+                id: "purse",
+                name: "Geldbörse erweitern",
+                desc: "+10 max. Gold pro Level.",
+                costs: [ { money: 5 }, { money: 12 }, { money: 22 }, { money: 34 }, { money: 48 }, { money: 66 } ], // bleibt jeweils unter dem neuen Gold-Maximum
+                maxLevel: 6,
+                effects: { maxMoney: 10 },
+                info: () => `Level ${upgradeLevel("purse")}/6 · max. Gold ${resMax("money")}`
+            },
+            {
                 id: "mind",
                 name: "Geist trainieren",
-                desc: "Erhöht den Multiplikator der Meditation um 10 %.",
+                desc: "Trainiert deinen Geist. Auf Level 5 schaltet er die Meditation frei.",
                 baseCost: { money: 10 },
                 costFactor: 1.4, // Kosten: 10, 14, 20, 28, 39 Gold (bleibt unter dem Gold-Maximum von 50 mit Geldbörse)
                 maxLevel: 5,
-                info: () => upgradeLevel("mind") >= 5
-                    ? `Level 5/5 · Meditation x${fmt(meditationMult(), 3)}`
-                    : `Level ${upgradeLevel("mind")}/5 · Meditation x${fmt(meditationMult(), 3)} → x${fmt(meditationMult() * MIND_UPGRADE_FACTOR, 3)}`
+                info: () => `Level ${upgradeLevel("mind")}/5`
             }
         ];
 
@@ -988,9 +1025,8 @@
             { label: "Aktionspunkte",        get: () => `${state.active.length}/${apTotal()} belegt` },
             { label: "Energie",              get: () => `${Math.floor(state.resources.energy.current + 1e-9)}/${resMax("energy")}` },
             { label: "Gesundheits-Regeneration", get: () => `${fmt(regenOf("health"))}/Tick` },
-            { label: "Energie-Regeneration", get: () => `${fmt(regenOf("energy") * regenMult() + regenFlat())}/Tick` },
+            { label: "Energie-Regeneration", get: () => `${fmt(regenOf("energy") + regenFlat())}/Tick` },
             { label: "Gold",                 get: () => `${Math.floor(state.resources.money.current + 1e-9)}/${resMax("money")}` },
-            { label: "Meditations-Multiplikator", get: () => `x${fmt(regenMultOf("meditation"), 3)}` },
             { label: "Meditation (Skill)",   get: () => skillText("meditation") },
             { label: "Ausruhen (Skill)",     get: () => skillText("sleep") },
             { label: "Ganzkörper-Level",     get: () => `${usesOf("fullbody")}/${activityById("fullbody").maxUses}` },
@@ -1000,6 +1036,7 @@
             { label: "Lehre",                get: () => `${usesOf("apprentice")}/${activityById("apprentice").maxUses}` },
             { label: "Angriff",              get: () => `${fmt(atk())}` },
             { label: "Angriffsgeschwindigkeit", get: () => `${fmt(attackSpeed())}/Tick` },
+            { label: "Aktives Pet",          get: () => activePetCfg() ? activePetCfg().name : "–" },
             { label: "Essen",                get: () => `${Math.floor(state.resources.food.current + 1e-9)}/${resMax("food")}` + (passiveDrainOf("food") > 0 ? ` (-${fmt(passiveDrainOf("food"))}/Tick)` : "") },
             { label: "Crit-Chance",          get: () => `${fmt(critChance() * 100, 0)} % (Ergebnis x${CRIT_MULT})` }
         ];
@@ -1033,6 +1070,10 @@
             state.equipped = {};   // Slot -> ausgerüstete Item-ID
             state.battle = null;   // laufender Kampf (nicht gespeichert)
             state.wins = {};       // Kampf-ID -> Siege
+            state.pets = {};       // geschlüpfte Pets (ID -> true)
+            state.activePet = null;
+            state.incubation = null; // { pet, left, total }
+            state.bestiary = {};   // Gegnername -> { kills }
             state.skills = {};     // Skill-ID -> { level, xp }
             state.ticksPerSec = BASE_TICKS_PER_SEC; // Spielgeschwindigkeit (Regler in den Stats)
             for (const u of UPGRADE_CONFIG) state.upgrades[u.id] = 0;
@@ -1144,6 +1185,56 @@
         }
 
         // Ein Spiel-Tick: Regeneration + alle laufenden Aktivitäten
+        /* ---- Pets: Funktionen ---- */
+        function petById(id) { return PET_CONFIG.find(p => p.id === id); }
+        function activePetCfg() { return state.activePet ? petById(state.activePet) || null : null; }
+        // Pet fehlt noch komplett (nicht geschlüpft, nicht in der Brutstätte, kein Ei im Besitz)
+        function petFree(id) {
+            const p = petById(id);
+            return !state.pets[id] && !(state.incubation && state.incubation.pet === id) && (state.loot[p.egg] || 0) <= 0;
+        }
+        function petsUnlocked() { return !!state.flags.petsUnlocked; }
+        function startIncubation(petId) {
+            const p = petById(petId);
+            if (!p) return;
+            tick();
+            if (state.incubation) { showToast("Die Brutstätte ist belegt"); return; }
+            if ((state.loot[p.egg] || 0) <= 0) return;
+            state.loot[p.egg] -= 1;
+            state.incubation = { pet: petId, left: p.hatchTicks, total: p.hatchTicks };
+            updateUI();
+            saveGame();
+        }
+        function incubationTick() {
+            const inc = state.incubation;
+            if (!inc) return;
+            inc.left -= 1;
+            if (inc.left <= 0) {
+                const p = petById(inc.pet);
+                state.pets[inc.pet] = true;
+                if (!state.activePet) state.activePet = inc.pet;
+                state.incubation = null;
+                setStatus(`${p.name} ist geschlüpft!`);
+            }
+        }
+        function setActivePet(id) {
+            if (!state.pets[id]) return;
+            tick();
+            state.activePet = state.activePet === id ? null : id;
+            clampAll();
+            updateUI();
+            saveGame();
+        }
+        function seeEnemy(name) { if (!state.bestiary[name]) state.bestiary[name] = { kills: 0 }; }
+        function lootText(table) {
+            return table.map(e => {
+                const parts = [];
+                for (const [key, amount] of Object.entries(e.give || {})) parts.push(`+${amount} ${RESOURCE_CONFIG[key].name}`);
+                if (e.item) parts.push(LOOT_ITEMS[e.item].name);
+                return parts.join(", ") + (e.chance < 1 ? ` (${Math.round(e.chance * 100)} %)` : "");
+            }).join(" · ");
+        }
+
         function winsOf(id) { return state.wins[id] || 0; }
         function attackSpeed() { return BASE_ATTACK_SPEED + itemBonus("attackSpeed"); }
         function battleById(id) { return BATTLE_CONFIG.find(b => b.id === id); }
@@ -1164,9 +1255,10 @@
             tick();
             if (state.resources.health.current <= 1e-9) { showToast("Zu wenig Gesundheit für einen Kampf"); return; }
             for (const other of [...state.active]) stopActivity(other);
-            state.battle = { id, idx: 0, enemyHp: cfg.enemies[0].hp, pProg: 0, eProg: 0, log: [], over: false, result: "" };
+            state.battle = { id, idx: 0, enemyHp: cfg.enemies[0].hp, pProg: 0, petProg: 0, eProg: 0, log: [], over: false, result: "" };
             blog(`Du betrittst: ${cfg.name}.`);
             blog(`${cfg.enemies[0].name} erscheint.`);
+            seeEnemy(cfg.enemies[0].name);
             ui.battle.hidden = false;
             updateUI();
         }
@@ -1174,39 +1266,48 @@
             if (state.battle && state.battle.id === id && !state.battle.over) { ui.battle.hidden = false; updateUI(); return; }
             startBattle(id);
         }
-        // Ein Kampf-Tick: Spieler und Gegner sammeln Angriffsfortschritt (Angriffe/Tick) und schlagen bei >= 1 zu
+        // Ein Kampf-Tick: Spieler, Pet und Gegner sammeln Angriffsfortschritt (Angriffe/Tick) und schlagen bei >= 1 zu
         function battleTick() {
             const b = state.battle;
             if (!b || b.over) return;
             const cfg = battleById(b.id);
             const enemy = () => cfg.enemies[b.idx];
 
-            b.pProg += attackSpeed();
-            while (b.pProg >= 1 && !b.over) {
-                b.pProg -= 1;
-                const dmg = atk();
+            // Schaden am Gegner; kümmert sich um Sieg bzw. nächsten Gegner
+            const hitEnemy = (dmg, who) => {
                 b.enemyHp = Math.max(0, b.enemyHp - dmg);
-                blog(`Du greifst ${enemy().name} an: ${fmt(dmg)} Schaden.`);
-                if (b.enemyHp <= 1e-9) {
-                    blog(`${enemy().name} besiegt!`);
-                    b.idx += 1;
-                    if (b.idx >= cfg.enemies.length) {
-                        b.over = true;
-                        b.result = "win";
-                        state.wins[b.id] = (state.wins[b.id] || 0) + 1;
-                        blog(`${cfg.name} abgeschlossen!`);
-                        setStatus(`${cfg.name} gewonnen.`);
-                        if (cfg.onWin) {
-                            const loot = cfg.onWin();
-                            if (loot) blog("Beute: " + loot);
-                            checkUnlocks();
-                        }
-                    } else {
-                        b.enemyHp = enemy().hp;
-                        b.eProg = 0;
-                        blog(`${enemy().name} erscheint.`);
+                blog(`${who} greift ${enemy().name} an: ${fmt(dmg)} Schaden.`);
+                if (b.enemyHp > 1e-9) return;
+                blog(`${enemy().name} besiegt!`);
+                seeEnemy(enemy().name);
+                state.bestiary[enemy().name].kills += 1;
+                b.idx += 1;
+                if (b.idx >= cfg.enemies.length) {
+                    b.over = true;
+                    b.result = "win";
+                    state.wins[b.id] = (state.wins[b.id] || 0) + 1;
+                    blog(`${cfg.name} abgeschlossen!`);
+                    setStatus(`${cfg.name} gewonnen.`);
+                    if (cfg.onWin) {
+                        const loot = cfg.onWin();
+                        if (loot) blog("Beute: " + loot);
+                        checkUnlocks();
                     }
+                } else {
+                    b.enemyHp = enemy().hp;
+                    b.eProg = 0;
+                    blog(`${enemy().name} erscheint.`);
+                    seeEnemy(enemy().name);
                 }
+            };
+
+            b.pProg += attackSpeed();
+            while (b.pProg >= 1 && !b.over) { b.pProg -= 1; hitEnemy(atk(), "Du"); }
+
+            const pet = activePetCfg();
+            if (pet && !b.over) {
+                b.petProg += pet.speed;
+                while (b.petProg >= 1 && !b.over) { b.petProg -= 1; hitEnemy(pet.atk, pet.name); }
             }
             if (b.over) { b.idx = Math.min(b.idx, cfg.enemies.length - 1); return; }
 
@@ -1238,6 +1339,7 @@
                 const activity = activityById(id);
                 if (activity) runActivity(activity);
             }
+            incubationTick();
             if (state.battle) battleTick();
             if (state.resources.health.current <= 1e-9 && !isActive("sleep")) forceSleep();
         }
@@ -1284,6 +1386,7 @@
         function checkUnlocks() {
             if ((state.loot.foxTail || 0) > 0) state.flags.foxTailFound = true;
             if (state.resources.fame.current >= COMBAT_UNLOCK_FAME - 1e-9) state.flags.combatUnlocked = true;
+            if (state.incubation || PET_CONFIG.some(p => state.pets[p.id] || (state.loot[p.egg] || 0) > 0)) state.flags.petsUnlocked = true;
             for (const item of ITEM_CONFIG) {
                 const reached = item.unlockWhen ? item.unlockWhen() : canAfford(item.unlock);
                 if (!state.unlocked.includes(item.id) && reached) {
@@ -1353,6 +1456,11 @@
                 const g = GEAR[id];
                 if (g) total += g.effects[name] || 0;
             }
+            for (const u of UPGRADE_CONFIG) { // Upgrades mit dauerhaften Effekten pro Level
+                if (u.effects) total += upgradeLevel(u.id) * (u.effects[name] || 0);
+            }
+            const pet = activePetCfg();
+            if (pet) total += pet.effects[name] || 0;
             return total;
         }
 
@@ -1446,10 +1554,9 @@
         /* ---- Skills ---- */
         function skillOf(id) { return state.skills[id] || (state.skills[id] = { level: 0, xp: 0 }); }
         function skillNeed(level) { return Math.ceil(SKILL_BASE_NEED * Math.pow(SKILL_NEED_GROWTH, level)); }
-        function skillSpeed(id) { return 1 + SKILL_SPEED_PER_LEVEL * skillOf(id).level; }
         function skillText(id) {
             const s = skillOf(id);
-            return `Lv ${s.level} · XP ${s.xp}/${skillNeed(s.level)} · +${fmt(s.level * SKILL_SPEED_PER_LEVEL * 100, 1)} %`;
+            return `Lv ${s.level} · XP ${s.xp}/${skillNeed(s.level)}`;
         }
         function addSkillXp(id) {
             const s = skillOf(id);
@@ -1504,15 +1611,9 @@
         function upgradeLevel(id) { return state.upgrades[id] || 0; }
         function maxHealth() { return resMax("health"); }
 
-        function meditationMult() {
-            return MEDITATION_BASE_MULT * Math.pow(MIND_UPGRADE_FACTOR, upgradeLevel("mind"));
-        }
-
-        function regenMultOf(id) { return meditationMult() * skillSpeed(id); }
         function regenFlat() { return isActive("meditation") ? MEDITATION_FLAT_REGEN : 0; }
-        function regenMult() {
-            return isActive("meditation") ? regenMultOf("meditation") : 1;
-        }
+        // Multiplikatoren (Meditation, Ausruhen-Skill) sind vorerst entfernt – sie kommen später als Offline-System zurück
+        function regenMult() { return 1; }
 
         // Erholungsfaktor beim Schlafen: reduziert, solange der Zwangsschlaf-Zähler läuft
         function sleepFactor() {
@@ -1582,6 +1683,7 @@
         function rollLoot(table, mult = 1) {
             const parts = [];
             for (const entry of table) {
+                if (entry.when && !entry.when()) continue; // z. B. Eier nur, solange das Pet noch fehlt
                 if (Math.random() >= entry.chance) continue;
                 for (const [key, amount] of Object.entries(entry.give || {})) {
                     const res = state.resources[key];
@@ -1758,6 +1860,7 @@
         /* ---- Upgrades ---- */
         function upgradeCost(upgrade) {
             const level = upgradeLevel(upgrade.id);
+            if (upgrade.costs) return { ...upgrade.costs[Math.min(level, upgrade.costs.length - 1)] };
             const cost = {};
             for (const [key, base] of Object.entries(upgrade.baseCost)) {
                 cost[key] = Math.ceil(base * Math.pow(upgrade.costFactor, level));
@@ -1990,11 +2093,46 @@
                 combatList.appendChild(c.btn);
                 ui.combat[bc.id] = c;
             }
+            // Bestiarium
+            ui.bestiary = [];
+            const bestList = document.getElementById('bestiary-list');
+            for (const bc of BATTLE_CONFIG) {
+                for (const en of bc.enemies) {
+                    const row = document.createElement('div');
+                    row.className = 'bestiary-entry';
+                    const nm = document.createElement('div');
+                    nm.className = 'bestiary-name';
+                    const info = document.createElement('div');
+                    info.className = 'bestiary-info';
+                    row.append(nm, info);
+                    bestList.appendChild(row);
+                    ui.bestiary.push({ bc, en, nm, info });
+                }
+            }
+            // Pets: Brutstätte, Eier, Pet-Liste
+            ui.petTab = document.getElementById('tab-btn-pets');
+            ui.petEmpty = document.getElementById('pet-empty');
+            const incList = document.getElementById('incubator-list');
+            ui.incubator = createCardButton("Brutstätte", () => {}, 'btn-reward');
+            incList.appendChild(ui.incubator.btn);
+            ui.eggBtn = {};
+            ui.petBtn = {};
+            const petList = document.getElementById('pet-list');
+            for (const p of PET_CONFIG) {
+                const eb = createCardButton(`${LOOT_ITEMS[p.egg].name} ausbrüten`, () => startIncubation(p.id), 'btn-reward');
+                eb.desc.textContent = `Brutdauer ${p.hatchTicks} Ticks`;
+                incList.appendChild(eb.btn);
+                ui.eggBtn[p.id] = eb;
+                const pb = createCardButton(p.name, () => setActivePet(p.id), 'btn-reward');
+                pb.desc.textContent = `${p.desc} · greift im Kampf mit (${fmt(p.atk)} ATK, ${fmt(p.speed)}/Tick)`;
+                petList.appendChild(pb.btn);
+                ui.petBtn[p.id] = pb;
+            }
             ui.filterBtn = document.getElementById('filter-max');
             ui.filterBtn.addEventListener('click', () => { state.flags.showMaxed = !state.flags.showMaxed; updateUI(); saveGame(); });
             ui.battle = document.getElementById('battle');
             ui.bEl = {};
-            for (const id of ['battle-room-name', 'battle-room-count', 'b-you-hp', 'b-you-hp-text', 'b-you-atk', 'b-you-atk-text',
+            for (const id of ['battle-room-name', 'battle-room-count', 'b-you-hp', 'b-you-hp-text', 'b-you-atk', 'b-you-atk-text', 'b-pet-bar', 'b-pet-atk', 'b-pet-atk-text',
                               'b-enemy-name', 'b-enemy-hp', 'b-enemy-hp-text', 'b-enemy-atk', 'b-enemy-atk-text', 'battle-log', 'battle-again']) {
                 ui.bEl[id] = document.getElementById(id);
             }
@@ -2121,6 +2259,12 @@
             setText(E['b-enemy-hp-text'], `${fmt(b.enemyHp)} / ${fmt(enemy.hp)}`);
             E['b-you-atk'].style.width = pct(b.pProg);
             setText(E['b-you-atk-text'], `Angriff x${fmt(atk())} · ${fmt(attackSpeed())}/Tick`);
+            const petCfg = activePetCfg();
+            if (E['b-pet-bar'].hidden === !!petCfg) E['b-pet-bar'].hidden = !petCfg;
+            if (petCfg) {
+                E['b-pet-atk'].style.width = pct(b.petProg || 0);
+                setText(E['b-pet-atk-text'], `${petCfg.name} x${fmt(petCfg.atk)} · ${fmt(petCfg.speed)}/Tick`);
+            }
             E['b-enemy-atk'].style.width = pct(b.eProg);
             setText(E['b-enemy-atk-text'], `Schlag x${fmt(enemy.atk)} · ${fmt(enemy.speed)}/Tick`);
             E['battle-again'].hidden = !b.over;
@@ -2147,6 +2291,40 @@
                 c.btn.classList.toggle('running', running);
             }
             updateBattleView();
+            // Bestiarium (nur Kampf-Gegner)
+            for (const e of ui.bestiary) {
+                const seen = state.bestiary[e.en.name];
+                const row = e.nm.parentNode;
+                setText(e.nm, seen ? e.en.name : "???");
+                setText(e.info, seen
+                    ? `${fmt(e.en.hp)} HP · ${fmt(e.en.atk)} ATK · ${fmt(e.en.speed)}/Tick · Besiegt: ${seen.kills} · Beute: ${lootText(e.bc.loot || [])}`
+                    : "Noch nicht begegnet");
+            }
+            // Pets
+            const pu = petsUnlocked();
+            if (ui.petTab.hidden === pu) ui.petTab.hidden = !pu;
+            const inc = state.incubation;
+            const incP = inc ? petById(inc.pet) : null;
+            setText(ui.incubator.right, inc ? `${inc.left} Ticks` : "leer");
+            setText(ui.incubator.desc, inc ? `Brütet: ${LOOT_ITEMS[incP.egg].name}` : "Lege ein Ei zum Ausbrüten ein.");
+            ui.incubator.btn.disabled = true;
+            ui.incubator.bar.style.width = inc ? ((1 - inc.left / inc.total) * 100).toFixed(1) + '%' : '0%';
+            let anyPet = false;
+            for (const p of PET_CONFIG) {
+                const have = (state.loot[p.egg] || 0) > 0;
+                const eb = ui.eggBtn[p.id];
+                if (eb.btn.hidden === have) eb.btn.hidden = !have;
+                eb.btn.disabled = !!inc;
+                setText(eb.right, "Einlegen");
+                const owned = !!state.pets[p.id];
+                anyPet = anyPet || owned;
+                const pb = ui.petBtn[p.id];
+                if (pb.btn.hidden === owned) pb.btn.hidden = !owned;
+                const act = state.activePet === p.id;
+                setText(pb.right, act ? "● Aktiv" : "Aktivieren");
+                pb.btn.classList.toggle('running', act);
+            }
+            ui.petEmpty.hidden = anyPet;
             let exploreVisible = false;
             for (const a of ACTIVITY_CONFIG) {
                 const c = ui.act[a.id];
@@ -2267,6 +2445,10 @@
                 flags: { ...state.flags },
                 equipped: { ...state.equipped },
                 wins: { ...state.wins },
+                pets: { ...state.pets },
+                activePet: state.activePet,
+                incubation: state.incubation ? { ...state.incubation } : null,
+                bestiary: JSON.parse(JSON.stringify(state.bestiary)),
                 skills: JSON.parse(JSON.stringify(state.skills))
             };
             for (const key of Object.keys(RESOURCE_CONFIG)) {
@@ -2345,6 +2527,23 @@
                 }
             }
             if (parsed.uses && parsed.uses.lodge > 0 && !state.wins.lodge) state.wins.lodge = 1; // alter Stand: Jagdhütte war eine Aktion
+            if (parsed.inventory && parsed.inventory.purse > 0 && upgradeLevel("purse") === 0) state.upgrades.purse = 3; // alter Stand: Geldbörse (+30) -> 3 Upgrade-Level
+            // Pets, Brutstätte, Bestiarium
+            state.pets = {}; state.activePet = null; state.incubation = null; state.bestiary = {};
+            if (parsed.pets && typeof parsed.pets === 'object') {
+                for (const p of PET_CONFIG) if (parsed.pets[p.id] === true) state.pets[p.id] = true;
+            }
+            if (typeof parsed.activePet === 'string' && state.pets[parsed.activePet]) state.activePet = parsed.activePet;
+            const inc = parsed.incubation;
+            if (inc && typeof inc === 'object' && petById(inc.pet) && Number.isFinite(inc.left) && inc.left > 0 && inc.left <= petById(inc.pet).hatchTicks && !state.pets[inc.pet]) {
+                state.incubation = { pet: inc.pet, left: Math.floor(inc.left), total: petById(inc.pet).hatchTicks };
+            }
+            if (parsed.bestiary && typeof parsed.bestiary === 'object') {
+                const names = new Set(BATTLE_CONFIG.flatMap(b => b.enemies.map(e => e.name)));
+                for (const [name, v] of Object.entries(parsed.bestiary)) {
+                    if (names.has(name) && v && Number.isInteger(v.kills) && v.kills >= 0 && v.kills <= 1e6) state.bestiary[name] = { kills: v.kills };
+                }
+            }
             // Skills
             if (parsed.skills && typeof parsed.skills === 'object') {
                 for (const a of ACTIVITY_CONFIG.filter(x => x.skill)) {
