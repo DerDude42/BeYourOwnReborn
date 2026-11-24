@@ -175,6 +175,13 @@ main {
     font-weight: bold;
 }
 
+/* Hilfetexte der Aktionen: nur bei Hover oder nach Antippen */
+.btn-help { display: none; margin-bottom: 4px; }
+.action-btn.help-open .btn-help { display: block; }
+@media (hover: hover) {
+    .action-btn:hover .btn-help { display: block; }
+}
+
 /* --- SHOP --- */
 [hidden] {
     display: none !important; /* sonst überschreibt display:block das hidden-Attribut */
@@ -205,6 +212,17 @@ main {
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+/* Aktionen-Reiter: Loop-Aktionen, Aktionen und Erkunden nebeneinander (auf schmalen Bildschirmen untereinander) */
+#tab-actions:not([hidden]) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+@media (max-width: 820px) {
+    #tab-actions:not([hidden]) { grid-template-columns: 1fr; }
 }
 
 #tabbar {

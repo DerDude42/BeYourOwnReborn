@@ -134,7 +134,7 @@ const FORCED_SLEEP_TICKS = 5;      // Zwangsschlaf bei 0 Gesundheit: so viele Ti
 const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
 const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
 const CRIT_MULT = 3;               // Bei einem Crit wird das Ergebnis x3
-const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked", "caveFound"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
+const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked", "caveFound", "fameCap25"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
 const BASE_ATK = 1;                // Grund-Angriff (+ Items + Ganzkörpertraining)
 
 // Beute-Gegenstände (landen in state.loot und in den Stats)
@@ -148,7 +148,10 @@ const LOOT_ITEMS = {
     eggFox: { name: "Fuchs-Ei", desc: "Im Reiter Pets ausbrüten", maxOwned: 1 },
     kitchenKnife: { name: "Küchenmesser", desc: "+0,5 Angriff", effects: { atk: 0.5 }, maxOwned: 1, slot: "weapon", category: "Waffe 1-Hand" }, // Belohnung der Küchenhilfe
     amulet:  { name: "Amulett", desc: "+0,2 Energie-Regeneration", effects: { energyRegen: 0.2 }, maxOwned: 1, slot: "neck", category: "Amulett" },
-    herbs:   { name: "Kräuter", desc: "Wert 1 Gold", value: { money: 1 } }
+    herbs:   { name: "Kräuter", desc: "Wert 1 Gold", value: { money: 1 } },
+    wood:    { name: "Holz", desc: "Material" },
+    foxFur:  { name: "Fuchsfell", desc: "Material" },
+    wolfPelt:{ name: "Wolfspelz", desc: "Material" }
 };
 
 /* ---- Ausrüstung: Slots (Position in der Personenansicht) und Gear-Verzeichnis ---- */
@@ -207,6 +210,7 @@ const BATTLE_CONFIG = [
             { chance: 1.0, give: { fame: 10 } },
             { chance: 1.0, item: "foxTail", amount: 1 },
             { chance: 1.0, item: "herbs",   amount: 1 },
+            { chance: 1.0, item: "foxFur",  amount: 1 },
             { chance: 1.0, item: "eggFox", amount: 1, when: () => petFree("fox") }
         ],
         onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === "lodge").loot)
@@ -218,7 +222,7 @@ const BATTLE_CONFIG = [
         visible: () => usesOf("patrol") >= 5,
         enemies: [ { name: "Wolf", hp: 36, atk: 3, speed: 0.85 } ], // WERTE ANPASSBAR: Balance siehe unten im Test-Hinweis
         loot: [
-            { chance: 1.0, give: { money: 10 } },
+            { chance: 1.0, item: "wolfPelt", amount: 1 },
             { chance: 0.1, item: "eggWolf", amount: 1, when: () => petFree("wolf") }
         ],
         onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === "cave").loot)
@@ -415,6 +419,104 @@ const ACTIVITY_CONFIG = [
             { chance: 0.2, item: "helm", amount: 1 }
         ]),
         info: () => `-0,5 Gesundheit/Tick · -1 Energie/Tick · -0,1 Essen/Tick · Dauer 10 Ticks · +1 Ruhm, +10 Gold, 20 % Helm`
+    },
+    // ---- Questkette nach dem Wolf: Dorfvorsteher -> Wald -> Tempel (Dauer/Kosten der Berichte und des Tempels sind Annahmen) ----
+    {
+        id: "elderMission",
+        tab: "training",
+        name: "Dem Dorfvorsteher vorsprechen",
+        desc: "Der Wolf ist besiegt. Der Dorfvorsteher hat einen neuen Auftrag für dich.",
+        visible: () => winsOf("cave") >= 1,
+        duration: 5,
+        maxUses: 1,
+        noCrit: true,
+        onComplete: () => {
+            setStatus("Auftrag: Suche im Wald nach dem verlassenen Tempel");
+            showToast("Der Dorfvorsteher bittet dich, im Wald nach dem verlassenen Tempel zu suchen.");
+            return "Auftrag: Wald erkunden";
+        },
+        info: () => `Dauer 5 Ticks`
+    },
+    {
+        id: "forest",
+        tab: "actions",
+        name: "Wald erkunden",
+        desc: "Du suchst im Wald nach dem verlassenen Tempel. Nach 5 Erkundungen wirst du ihn finden.",
+        visible: () => usesOf("elderMission") >= 1,
+        drain: { health: 0.5, energy: 0.5, food: 0.1 },
+        duration: 10,
+        noCrit: true,
+        onComplete: () => {
+            const text = rollLoot([
+                { chance: 0.3, item: "herbs", amount: 1 },
+                { chance: 0.3, item: "wood",  amount: 1 }
+            ]);
+            if (usesOf("forest") + 1 === 5) { // usesOf zählt erst nach onComplete hoch
+                setStatus("Verlassener Tempel gefunden");
+                showToast("Du hast den verlassenen Tempel gefunden! Berichte dem Dorfvorsteher.");
+            }
+            return text;
+        },
+        info: () => `-0,5 Gesundheit/Tick · -0,5 Energie/Tick · -0,1 Essen/Tick · Dauer 10 Ticks · ${Math.min(usesOf("forest"), 5)}/5 bis zum Tempel · 30 % Kräuter, 30 % Holz`
+    },
+    {
+        id: "reportTemple",
+        tab: "training",
+        name: "Bericht an den Dorfvorsteher: Tempel",
+        desc: "Berichte vom gefundenen Tempel. Belohnung: Maximaler Ruhm steigt auf 25. Schaltet Tempel untersuchen frei.",
+        visible: () => usesOf("forest") >= 5,
+        duration: 5,
+        maxUses: 1,
+        noCrit: true,
+        onComplete: () => {
+            state.flags.fameCap25 = true;
+            showToast("Maximaler Ruhm auf 25 erhöht");
+            return "Max. Ruhm 25";
+        },
+        info: () => `Dauer 5 Ticks · Belohnung: max. Ruhm 25`
+    },
+    {
+        id: "temple",
+        tab: "actions",
+        name: "Tempel untersuchen",
+        desc: "Du suchst den Eingang des verlassenen Tempels.",
+        visible: () => usesOf("reportTemple") >= 1,
+        drain: { health: 0.2, energy: 0.5 },
+        duration: 10,
+        maxUses: 5,
+        noCrit: true,
+        onComplete: () => {
+            const n = usesOf("temple") + 1; // usesOf zählt erst nach onComplete hoch
+            const hints = [
+                "Zwischen Wurzeln und Geröll entdeckst du alte Mauerreste.",
+                "Eine Säule liegt halb unter Moos begraben. Du kommst voran.",
+                "Du folgst der Mauer. Der Eingang kann nicht weit sein.",
+                "Du spürst es: Der Eingang ist fast gefunden.",
+                "Du hast den Eingang gefunden! Doch die schwere Steintür lässt sich nicht öffnen."
+            ];
+            const msg = hints[Math.min(n, 5) - 1];
+            setStatus(msg);
+            showToast(msg);
+            return n >= 5 ? "Eingang gefunden" : `Fortschritt ${n}/5`;
+        },
+        info: () => `Fortschritt ${usesOf("temple")}/5 · -0,2 Gesundheit/Tick · -0,5 Energie/Tick · Dauer 10 Ticks`
+    },
+    {
+        id: "reportEntrance",
+        tab: "training",
+        name: "Bericht an den Dorfvorsteher: Eingang",
+        desc: "Berichte vom Eingang, der sich nicht öffnen lässt.",
+        visible: () => usesOf("temple") >= 5,
+        duration: 5,
+        maxUses: 1,
+        noCrit: true,
+        onComplete: () => {
+            const msg = "Der Dorfvorsteher kennt keinen Weg hinein. Vorerst bleibt der Tempel verschlossen.";
+            setStatus(msg);
+            showToast(msg);
+            return "Noch offen";
+        },
+        info: () => `Dauer 5 Ticks`
     },
     {
         id: "wearTail",

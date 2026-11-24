@@ -33,6 +33,10 @@ function buildUI() {
     // Aktions-Buttons
     const actContainer = document.getElementById('actions-container');
     actContainer.textContent = "";
+    const actTitle = document.createElement('h2');
+    actTitle.className = 'card-title';
+    actTitle.textContent = 'Aktionen';
+    actContainer.appendChild(actTitle);
     for (const action of ACTION_CONFIG) {
         const costKeys = Object.keys(action.cost || {});
         const costText = costKeys.length > 0 ? `Kosten: ${formatResMap(action.cost)}` : "Kostenlos";
@@ -54,7 +58,10 @@ function buildUI() {
 
         const desc = document.createElement('div');
         desc.className = 'btn-desc';
-        desc.appendChild(document.createTextNode(action.desc));
+        const helpSpan = document.createElement('span');
+        helpSpan.className = 'btn-help';
+        helpSpan.textContent = action.desc;
+        desc.appendChild(helpSpan);
         const costSpan = document.createElement('span');
         costSpan.className = 'btn-cost';
         costSpan.textContent = costText;
@@ -153,16 +160,25 @@ function createCardButton(name, onClick, rightClass) {
     right.className = rightClass;
     header.append(nameSpan, right);
 
+    // Hilfetext: nur bei Hover (Maus) oder nach dem Antippen (Touch) sichtbar; Kosten/Fortschritt bleiben immer sichtbar
     const desc = document.createElement('div');
     desc.className = 'btn-desc';
-    const descText = document.createTextNode('');
+    const help = document.createElement('span');
+    help.className = 'btn-help';
     const extra = document.createElement('span');
     extra.className = 'btn-cost';
-    desc.append(descText, extra);
+    desc.append(help, extra);
 
     btn.append(header, desc);
-    return { btn, right, desc: descText, extra, bar };
+    return { btn, right, desc: help, extra, bar };
 }
+
+// Touch: Antippen blendet den Hilfetext ein, bis woanders getippt wird
+document.addEventListener('click', (e) => {
+    const hit = e.target.closest ? e.target.closest('.action-btn') : null;
+    for (const el of document.querySelectorAll('.action-btn.help-open')) if (el !== hit) el.classList.remove('help-open');
+    if (hit && e.pointerType && e.pointerType !== 'mouse') hit.classList.add('help-open');
+});
 
 function buildMenus() {
     ui.act = {};

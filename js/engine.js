@@ -561,6 +561,7 @@ function resMax(key) {
         if (a.levelBonus && a.levelBonus[key]) max += Math.min(usesOf(a.id), a.bonusUses != null ? a.bonusUses : Infinity) * a.levelBonus[key];
     }
     max += itemBonus("max" + key.charAt(0).toUpperCase() + key.slice(1)); // z. B. maxEnergy
+    if (key === "fame" && state.flags.fameCap25) max += 5; // Belohnung "Bericht: Tempel"
     return max;
 }
 
