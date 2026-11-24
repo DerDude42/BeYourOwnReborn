@@ -109,13 +109,18 @@ function regenOf(key) {
     return base > 0 || itemBonus(key + "Regen") > 0 ? base + itemBonus(key + "Regen") : 0;
 }
 
+// Ohne Essen sinkt die normale Regeneration von Gesundheit und Energie auf 20 %
+const STARVED_REGEN_FACTOR = 0.2;
+function regenFactor() { return state.resources.food.current <= 1e-9 ? STARVED_REGEN_FACTOR : 1; }
+
 // Regeneration für eine vergangene Zeitspanne (Sekunden) anwenden
 function regenerate(ticks, mult = 1) {
     if (!(ticks > 0)) return;
     for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
         if (regenOf(key) > 0) {
             const res = state.resources[key];
-            res.current = clampRes(key, res.current + regenOf(key) * ticks * (key === "energy" ? mult : 1));
+            const f = (key === "health" || key === "energy") ? regenFactor() : 1;
+            res.current = clampRes(key, res.current + regenOf(key) * ticks * f * (key === "energy" ? mult : 1));
         }
     }
 }
@@ -280,7 +285,7 @@ function battleTick() {
     if (b.result === "lose") { // verloren: Kampf wird beendet und muss neu begonnen werden
         stopBattle();
         setStatus("Kampf verloren");
-        showToast("Kampf verloren – ruh dich aus und beginne von vorn");
+        showToast("Kampf verloren. Du solltest härter trainieren!");
     }
 }
 
@@ -345,6 +350,11 @@ function executeAction(actionId) {
 function checkUnlocks() {
     if ((state.loot.foxTail || 0) > 0) state.flags.foxTailFound = true;
     if (state.resources.fame.current >= COMBAT_UNLOCK_FAME - 1e-9) state.flags.combatUnlocked = true;
+    if (usesOf("patrol") >= 5 && !state.flags.caveFound) {
+        state.flags.caveFound = true;
+        setStatus("Wolfshöhle entdeckt");
+        showToast("Du hast die Wolfshöhle entdeckt!");
+    }
     if (state.incubation || PET_CONFIG.some(p => state.pets[p.id] || (state.loot[p.egg] || 0) > 0)) state.flags.petsUnlocked = true;
     for (const item of ITEM_CONFIG) {
         const reached = item.unlockWhen ? item.unlockWhen() : canAfford(item.unlock);

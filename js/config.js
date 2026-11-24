@@ -134,7 +134,7 @@ const FORCED_SLEEP_TICKS = 5;      // Zwangsschlaf bei 0 Gesundheit: so viele Ti
 const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
 const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
 const CRIT_MULT = 3;               // Bei einem Crit wird das Ergebnis x3
-const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
+const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked", "caveFound"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
 const BASE_ATK = 1;                // Grund-Angriff (+ Items + Ganzkörpertraining)
 
 // Beute-Gegenstände (landen in state.loot und in den Stats)
@@ -144,6 +144,7 @@ const LOOT_ITEMS = {
     foxTail: { name: "Fuchsschwanz", desc: "Wert 10 Gold · als Talisman: +5 max. Gesundheit, +3 max. Energie", value: { money: 10 },
                effects: { maxHealth: 5, maxEnergy: 3 }, slot: "talisman", category: "Talisman", manualEquip: true },
     helm:    { name: "Helm", desc: "+10 max. Gesundheit · +0,1 Gesundheit/Tick", effects: { maxHealth: 10, healthRegen: 0.1 }, maxOwned: 1, slot: "head", category: "Kopf" },
+    eggWolf: { name: "Wolfsei", desc: "Im Reiter Pets ausbrüten", maxOwned: 1 },
     eggFox: { name: "Fuchs-Ei", desc: "Im Reiter Pets ausbrüten", maxOwned: 1 },
     kitchenKnife: { name: "Küchenmesser", desc: "+0,5 Angriff", effects: { atk: 0.5 }, maxOwned: 1, slot: "weapon", category: "Waffe 1-Hand" }, // Belohnung der Küchenhilfe
     amulet:  { name: "Amulett", desc: "+0,2 Energie-Regeneration", effects: { energyRegen: 0.2 }, maxOwned: 1, slot: "neck", category: "Amulett" },
@@ -176,13 +177,16 @@ for (const [id, it] of Object.entries(LOOT_ITEMS)) {
 // Ein Pet ist immer ein besiegbares Tier (Bestiarium); sein Ei fällt als Beute dieses Gegners
 // egg: ID des Ei-Items in LOOT_ITEMS · hatchTicks: Brutdauer · effects: Boni, solange das Pet aktiv ist · atk/speed: Kampfwerte
 const PET_CONFIG = [
-    { id: "fox", name: "Fuchs", egg: "eggFox", hatchTicks: 80, effects: { maxHealth: 2 }, atk: 0.5, speed: 0.6, desc: "+2 max. Gesundheit" }
+    { id: "fox", name: "Fuchs", egg: "eggFox", hatchTicks: 80, effects: { maxHealth: 2 }, atk: 0.5, speed: 0.6, desc: "+2 max. Gesundheit" },
+    // WOLF-PET: Werte hier selbst festlegen (Platzhalter, bisher ohne Bonus)
+    { id: "wolf", name: "Wolf", egg: "eggWolf", hatchTicks: 120, effects: {}, atk: 1, speed: 0.6, desc: "Boni noch offen" }
 ];
 
 /* ---- Kampf: Gegner und Räume (einfach erweiterbar) ---- */
 const BASE_ATTACK_SPEED = 0.5;   // Angriffe pro Tick (Spieler); Items können "attackSpeed" ergänzen
 const BATTLE_LOG_MAX = 40;
 const COMBAT_UNLOCK_FAME = 5;
+const HOUSE_FULLBODY_LEVEL = 5; // Ganzkörper-Level, ab dem das Haus erscheint (Ganzkörper selbst geht bis Level 10)
 const KITCHEN_KNIFE_USES = 5; // Küchenhilfe-Abschlüsse bis zum Küchenmesser
 // enemies: nacheinander zu besiegen; speed = Angriffe pro Tick; Schaden = atk
 const BATTLE_CONFIG = [
@@ -206,6 +210,18 @@ const BATTLE_CONFIG = [
             { chance: 1.0, item: "eggFox", amount: 1, when: () => petFree("fox") }
         ],
         onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === "lodge").loot)
+    },
+    {
+        id: "cave",
+        name: "Wolfshöhle",
+        desc: "Kampf gegen einen Wolf. Entdeckt nach 5x Patrouille. Mit voller Ausrüstung aber ohne ausreichendes Training verlierst du knapp.",
+        visible: () => usesOf("patrol") >= 5,
+        enemies: [ { name: "Wolf", hp: 36, atk: 3, speed: 0.85 } ], // WERTE ANPASSBAR: Balance siehe unten im Test-Hinweis
+        loot: [
+            { chance: 1.0, give: { money: 10 } },
+            { chance: 0.1, item: "eggWolf", amount: 1, when: () => petFree("wolf") }
+        ],
+        onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === "cave").loot)
     }
 ];
 
@@ -264,10 +280,10 @@ const ACTIVITY_CONFIG = [
         desc: "Pro Level: +0,2 Angriff, +1 max. Gesundheit, +1 max. Energie.",
         drain: { energy: 0.5 },
         duration: 10,
-        maxUses: 5,
+        maxUses: 10,
         atkPerUse: 0.2,
         levelBonus: { health: 1, energy: 1 },
-        info: () => `Level ${usesOf("fullbody")}/5 · -0,5 Energie/Tick · Dauer 10 Ticks`
+        info: () => `Level ${usesOf("fullbody")}/10 · -0,5 Energie/Tick · Dauer 10 Ticks`
     },
     {
         id: "sparring",
@@ -330,11 +346,11 @@ const ACTIVITY_CONFIG = [
         visible: () => gearCount("kitchenKnife") > 0 || usesOf("hunt") > 0,
         drain: { health: 0.8, energy: 0.8 },
         drainBonus: { health: "huntHealthSave", energy: "huntEnergySave" },
-        duration: 5,
+        duration: 3,
         onComplete: (a, mult) => rollLoot([{ chance: 1, give: { food: 1 + statBonus("huntFood") } }], mult),
         info: () => {
             const d = drainOf(activityById("hunt"));
-            return `Dauer 5 Ticks · -${fmt(d.health)} Gesundheit/Tick · -${fmt(d.energy)} Energie/Tick · Ertrag: ${1 + statBonus("huntFood")} Essen · ${usesOf("hunt")}x durchgeführt`;
+            return `Dauer 3 Ticks · -${fmt(d.health)} Gesundheit/Tick · -${fmt(d.energy)} Energie/Tick · Ertrag: ${1 + statBonus("huntFood")} Essen · ${usesOf("hunt")}x durchgeführt`;
         }
     },
     {
@@ -354,7 +370,7 @@ const ACTIVITY_CONFIG = [
         tab: "actions",
         name: "Verlassenes Haus durchsuchen",
         desc: "Riskant, aber es gibt Beute.",
-        visible: () => usesOf("fullbody") >= activityById("fullbody").maxUses,
+        visible: () => usesOf("fullbody") >= HOUSE_FULLBODY_LEVEL,
         requires: { atk: 3 },
         drain: { energy: 0.6, health: 0.6 },
         duration: 15,
@@ -465,8 +481,8 @@ const STAT_CONFIG = [
     { label: "Gesundheit",           get: () => `${Math.floor(state.resources.health.current + 1e-9)}/${resMax("health")}` },
     { label: "Aktionspunkte",        get: () => `${state.active.length}/${apTotal()} belegt` },
     { label: "Energie",              get: () => `${Math.floor(state.resources.energy.current + 1e-9)}/${resMax("energy")}` },
-    { label: "Gesundheits-Regeneration", get: () => `${fmt(regenOf("health"))}/Tick` },
-    { label: "Energie-Regeneration", get: () => `${fmt(regenOf("energy") + regenFlat())}/Tick` },
+    { label: "Gesundheits-Regeneration", get: () => `${fmt(regenOf("health") * regenFactor())}/Tick` },
+    { label: "Energie-Regeneration", get: () => `${fmt(regenOf("energy") * regenFactor() + regenFlat())}/Tick` },
     { label: "Gold",                 get: () => `${Math.floor(state.resources.money.current + 1e-9)}/${resMax("money")}` },
     { label: "Meditation (Skill)",   get: () => skillText("meditation") },
     { label: "Ausruhen (Skill)",     get: () => skillText("sleep") },
