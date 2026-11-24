@@ -20,6 +20,7 @@ function saveGame() {
         activePet: state.activePet,
         incubation: state.incubation ? { ...state.incubation } : null,
         bestiary: JSON.parse(JSON.stringify(state.bestiary)),
+        seenItems: { ...state.seenItems },
         skills: JSON.parse(JSON.stringify(state.skills))
     };
     for (const key of Object.keys(RESOURCE_CONFIG)) {
@@ -102,7 +103,10 @@ function applySave(parsed) {
     if (parsed.uses && parsed.uses.lodge > 0 && !state.wins.lodge) state.wins.lodge = 1; // alter Stand: Jagdhütte war eine Aktion
     if (parsed.inventory && parsed.inventory.purse > 0 && upgradeLevel("purse") === 0) state.upgrades.purse = 3; // alter Stand: Geldbörse (+30) -> 3 Upgrade-Level
     // Pets, Brutstätte, Bestiarium
-    state.pets = {}; state.activePet = null; state.incubation = null; state.bestiary = {};
+    state.pets = {}; state.activePet = null; state.incubation = null; state.bestiary = {}; state.seenItems = {};
+    if (parsed.seenItems && typeof parsed.seenItems === 'object') {
+        for (const [k, v] of Object.entries(parsed.seenItems)) if (v === true && k.length < 60) state.seenItems[k] = true;
+    }
     if (parsed.pets && typeof parsed.pets === 'object') {
         for (const p of PET_CONFIG) if (parsed.pets[p.id] === true) state.pets[p.id] = true;
     }

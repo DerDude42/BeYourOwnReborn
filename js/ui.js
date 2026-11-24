@@ -120,7 +120,7 @@ function updateUI() {
     if (ui.shopCard.hidden === shopOpen) ui.shopCard.hidden = !shopOpen;
     for (const item of ITEM_CONFIG) {
         const el = ui.items[item.id];
-        const visible = state.unlocked.includes(item.id);
+        const visible = state.unlocked.includes(item.id) && !isMaxed(item); // Gekauftes verschwindet aus dem Shop
         if (el.btn.hidden === visible) el.btn.hidden = !visible;
         if (!visible) continue;
 
@@ -271,6 +271,7 @@ function buildMenus() {
         return b;
     };
     const addInvRow = (o) => {
+        o.key = (o.gearId || o.sellId || o.name);
         const row = document.createElement('div');
         row.className = 'stat-row inv-row';
         row.hidden = true;
@@ -280,7 +281,7 @@ function buildMenus() {
         wrap.className = 'inv-right';
         const right = document.createElement('span');
         wrap.appendChild(right);
-        const e = { row, right, getCount: o.getCount, max: o.max, gearId: o.gearId, sellId: o.sellId };
+        const e = { key: o.key, row, right, getCount: o.getCount, max: o.max, gearId: o.gearId, sellId: o.sellId };
         if (o.sellId) {
             const id = o.sellId;
             ui.sellQty[id] = 1;
@@ -487,7 +488,8 @@ function updateMenus() {
     let anyOwned = false;
     for (const e of ui.inv) {
         const n = e.getCount();
-        const has = n > 0;
+        if (n > 0) state.seenItems[e.key] = true;
+        const has = !!state.seenItems[e.key]; // einmal besessen: bleibt sichtbar (auch bei Anzahl 0)
         if (has) anyOwned = true;
         if (e.row.hidden === has) e.row.hidden = !has;
         const eq = e.gearId && isEquipped(e.gearId);

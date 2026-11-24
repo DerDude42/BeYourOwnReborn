@@ -118,11 +118,11 @@ const ITEM_CONFIG = [
         id: "chefHat",
         slot: "head", category: "Kopf",
         name: "Küchenmütze",
-        desc: "Küchenhilfe: +0,3 Essen/Tick (nach 10x Küchenhilfe)",
+        desc: "Küchenhilfe: +0,1 Essen/Tick (nach 10x Küchenhilfe)",
         unlockWhen: () => usesOf("kitchen") >= 10,
         cost:   { money: 10 },
         maxOwned: 1,
-        effects: { kitchenFood: 0.3 }
+        effects: { kitchenFood: 0.1 }
     }
 ];
 
@@ -262,13 +262,12 @@ const ACTIVITY_CONFIG = [
         tab: "training",
         name: "Ganzkörpertraining",
         desc: "Pro Level: +0,2 Angriff, +1 max. Gesundheit, +1 max. Energie.",
-        cost: { money: 6 },
         drain: { energy: 0.5 },
         duration: 10,
         maxUses: 5,
         atkPerUse: 0.2,
         levelBonus: { health: 1, energy: 1 },
-        info: () => `Level ${usesOf("fullbody")}/5 · Kosten: 6 Gold · -0,5 Energie/Tick · Dauer 10 Ticks`
+        info: () => `Level ${usesOf("fullbody")}/5 · -0,5 Energie/Tick · Dauer 10 Ticks`
     },
     {
         id: "sparring",

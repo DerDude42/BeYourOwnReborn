@@ -28,6 +28,7 @@ function initDefaultState() {
     state.activePet = null;
     state.incubation = null; // { pet, left, total }
     state.bestiary = {};   // Gegnername -> { kills }
+    state.seenItems = {};  // Inventar-Zeilen, die schon einmal besessen wurden (bleiben sichtbar)
     state.skills = {};     // Skill-ID -> { level, xp }
     state.ticksPerSec = BASE_TICKS_PER_SEC; // Spielgeschwindigkeit (Regler in den Stats)
     for (const u of UPGRADE_CONFIG) state.upgrades[u.id] = 0;
@@ -274,8 +275,12 @@ function battleTick() {
         if (hp.current <= 1e-9) {
             b.over = true;
             b.result = "lose";
-            blog("Du wurdest besiegt und musst dich ausruhen.");
         }
+    }
+    if (b.result === "lose") { // verloren: Kampf wird beendet und muss neu begonnen werden
+        stopBattle();
+        setStatus("Kampf verloren");
+        showToast("Kampf verloren – ruh dich aus und beginne von vorn");
     }
 }
 
