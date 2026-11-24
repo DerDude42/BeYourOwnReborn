@@ -175,6 +175,7 @@ function incubationTick() {
         if (!state.activePet) state.activePet = inc.pet;
         state.incubation = null;
         setStatus(`${p.name} ist geschlüpft!`);
+        notifyPetTab();
     }
 }
 function setActivePet(id) {
@@ -363,6 +364,11 @@ function checkUnlocks() {
             flashInventoryTab();
         }
     }
+}
+
+// Pets-Reiter leuchtet, bis er geöffnet wird
+function notifyPetTab() {
+    if (ui.petTab && currentTab !== 'pets') ui.petTab.classList.add('glow');
 }
 
 // Lässt den Inventar-Reiter aufblinken (nicht, wenn man ihn gerade ansieht)
@@ -668,6 +674,7 @@ function rollLoot(table, mult = 1) {
             if (n <= 0) continue; // Limit erreicht: nichts mehr zu finden
             state.loot[entry.item] = have + n;
             autoEquip(entry.item);
+            if (PET_CONFIG.some(p => p.egg === entry.item)) notifyPetTab();
             parts.push(`${n}x ${it.name}`);
         }
     }

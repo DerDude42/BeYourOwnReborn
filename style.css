@@ -246,6 +246,22 @@ main {
     50%      { background-color: rgba(214, 176, 78, 0.45); }
 }
 
+/* Pets-Reiter: leuchtet und pulsiert, bis er geöffnet wird (neues Ei oder geschlüpftes Pet) */
+.tab-btn.glow {
+    color: #d6b04e;
+    box-shadow: inset 0 0 0 2px #d6b04e, 0 0 10px rgba(214, 176, 78, 0.7);
+    animation: tabglow 1s ease-in-out infinite;
+}
+
+@keyframes tabglow {
+    0%, 100% { background-color: transparent; }
+    50%      { background-color: rgba(214, 176, 78, 0.45); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tab-btn.glow { animation: none; background-color: rgba(214, 176, 78, 0.25); }
+}
+
 .action-btn.running {
     border-color: var(--success);
 }

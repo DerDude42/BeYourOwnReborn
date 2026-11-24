@@ -523,6 +523,7 @@ let currentTab = 'actions';
 function showTab(name) {
     currentTab = name;
     if (name === 'inventory' && ui.invTab) ui.invTab.classList.remove('flash');
+    if (name === 'pets' && ui.petTab) ui.petTab.classList.remove('glow');
     document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = p.id !== 'tab-' + name; });
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
 }
