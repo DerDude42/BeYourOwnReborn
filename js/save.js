@@ -87,6 +87,8 @@ function applySave(parsed) {
         }
     }
 
+    if (parsed.inventory && parsed.inventory.kitchenKnife > 0) state.loot.kitchenKnife = 1; // alter Stand: Küchenmesser war im Shop kaufbar
+
     if (parsed.flags && typeof parsed.flags === 'object') {
         for (const f of FLAGS) if (parsed.flags[f] === true) state.flags[f] = true;
     }

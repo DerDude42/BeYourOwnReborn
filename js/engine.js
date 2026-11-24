@@ -537,7 +537,7 @@ function resMax(key) {
     if (!cfg.hasMax) return Infinity;
     let max = cfg.max;
     for (const a of ACTIVITY_CONFIG) {
-        if (a.levelBonus && a.levelBonus[key]) max += usesOf(a.id) * a.levelBonus[key];
+        if (a.levelBonus && a.levelBonus[key]) max += Math.min(usesOf(a.id), a.bonusUses != null ? a.bonusUses : Infinity) * a.levelBonus[key];
     }
     max += itemBonus("max" + key.charAt(0).toUpperCase() + key.slice(1)); // z. B. maxEnergy
     return max;

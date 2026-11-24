@@ -41,11 +41,11 @@ const ITEM_CONFIG = [
         id: "woodstaff",
         slot: "weapon", category: "Waffe 1-Hand",
         name: "Speer",
-        desc: "+1 Angriff",
+        desc: "+2 Angriff",
         unlock: { money: 30 },
         cost:   { money: 50 },
         maxOwned: 1,
-        effects: { atk: 1 }
+        effects: { atk: 2 }
     },
     {
         id: "blanket",
@@ -107,18 +107,8 @@ const ITEM_CONFIG = [
         effects: { maxEnergy: 3 }
     },
     {
-        id: "kitchenKnife",
-        slot: "weapon", category: "Waffe 1-Hand",
-        name: "Küchenmesser",
-        desc: "+2 Angriff",
-        unlock: { money: 25 },
-        cost:   { money: 30 },
-        maxOwned: 1,
-        effects: { atk: 2 }
-    },
-    {
         id: "apron",
-        name: "Schürze",
+        name: "Küchenschürze",
         desc: "Schaltet die Loop-Aktion Küchenhilfe frei",
         unlock: { money: 10 },
         cost:   { money: 15 },
@@ -155,6 +145,7 @@ const LOOT_ITEMS = {
                effects: { maxHealth: 5, maxEnergy: 3 }, slot: "talisman", category: "Talisman", manualEquip: true },
     helm:    { name: "Helm", desc: "+10 max. Gesundheit · +0,1 Gesundheit/Tick", effects: { maxHealth: 10, healthRegen: 0.1 }, maxOwned: 1, slot: "head", category: "Kopf" },
     eggFox: { name: "Fuchs-Ei", desc: "Im Reiter Pets ausbrüten", maxOwned: 1 },
+    kitchenKnife: { name: "Küchenmesser", desc: "+0,5 Angriff", effects: { atk: 0.5 }, maxOwned: 1, slot: "weapon", category: "Waffe 1-Hand" }, // Belohnung der Küchenhilfe
     amulet:  { name: "Amulett", desc: "+0,2 Energie-Regeneration", effects: { energyRegen: 0.2 }, maxOwned: 1, slot: "neck", category: "Amulett" },
     herbs:   { name: "Kräuter", desc: "Wert 1 Gold", value: { money: 1 } }
 };
@@ -192,6 +183,7 @@ const PET_CONFIG = [
 const BASE_ATTACK_SPEED = 0.5;   // Angriffe pro Tick (Spieler); Items können "attackSpeed" ergänzen
 const BATTLE_LOG_MAX = 40;
 const COMBAT_UNLOCK_FAME = 5;
+const KITCHEN_KNIFE_USES = 5; // Küchenhilfe-Abschlüsse bis zum Küchenmesser
 // enemies: nacheinander zu besiegen; speed = Angriffe pro Tick; Schaden = atk
 const BATTLE_CONFIG = [
     {
@@ -306,32 +298,37 @@ const ACTIVITY_CONFIG = [
         id: "labor",
         tab: "loop",
         name: "Lohnarbeit",
-        desc: "Arbeiten gegen Bezahlung. Wiederholt sich, solange die Ressourcen reichen.",
+        desc: "Arbeiten gegen Bezahlung. Wiederholt sich, solange die Ressourcen reichen. Die ersten 3 Abschlüsse geben je +1 max. Gesundheit und +1 max. Energie.",
         visible: () => usesOf("apprentice") >= activityById("apprentice").maxUses,
         drain: { energy: 0.2, food: 0.5 },
         duration: 10,
         repeat: true,
+        levelBonus: { health: 1, energy: 1 },
+        bonusUses: 3, // levelBonus gilt nur für die ersten 3 Abschlüsse
         onComplete: () => rollLoot([{ chance: 1, give: { money: 10 } }]),
-        info: () => `-0,2 Energie/Tick · -0,5 Essen/Tick · Dauer 10 Ticks · Lohn: 10 Gold`
+        info: () => `-0,2 Energie/Tick · -0,5 Essen/Tick · Dauer 10 Ticks · Lohn: 10 Gold · Bonus ${Math.min(usesOf("labor"), 3)}/3`
     },
     {
         id: "kitchen",
         tab: "loop",
         name: "Küchenhilfe",
-        desc: "Hilft in der Küche und bringt Essen. Muss nach jedem Abschluss neu gestartet werden.",
+        desc: `Hilft in der Küche und bringt Essen. Nach ${KITCHEN_KNIFE_USES} Abschlüssen bekommst du ein Küchenmesser. Muss nach jedem Abschluss neu gestartet werden.`,
         visible: () => (state.inventory.apron || 0) > 0 || usesOf("kitchen") > 0,
         drain: { energy: 1 },
         duration: 10,
         gain: () => ({ food: 0.2 + statBonus("kitchenFood") }),
-        onComplete: () => rollLoot([{ chance: 1, give: { money: 4 } }]),
+        onComplete: () => rollLoot([
+            { chance: 1, give: { money: 4 } },
+            { chance: 1, item: "kitchenKnife", amount: 1, when: () => usesOf("kitchen") + 1 >= KITCHEN_KNIFE_USES } // usesOf zählt erst nach onComplete hoch
+        ]),
         info: () => `Dauer 10 Ticks · +${fmt(0.2 + statBonus("kitchenFood"))} Essen/Tick · -1 Energie/Tick · +4 Gold bei Abschluss · ${usesOf("kitchen")}x abgeschlossen`
     },
     {
         id: "hunt",
         tab: "actions",
         name: "Jagen",
-        desc: "Bringt sicher Essen. Freigeschaltet mit dem Küchenmesser.",
-        visible: () => (state.inventory.kitchenKnife || 0) > 0 || usesOf("hunt") > 0,
+        desc: "Bringt sicher Essen. Freigeschaltet, sobald du das Küchenmesser erhalten hast.",
+        visible: () => gearCount("kitchenKnife") > 0 || usesOf("hunt") > 0,
         drain: { health: 0.8, energy: 0.8 },
         drainBonus: { health: "huntHealthSave", energy: "huntEnergySave" },
         duration: 5,
