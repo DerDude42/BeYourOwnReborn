@@ -376,7 +376,7 @@ const ACTIVITY_CONFIG = [
         name: "Verlassenes Haus durchsuchen",
         desc: "Riskant, aber es gibt Beute.",
         visible: () => usesOf("fullbody") >= HOUSE_FULLBODY_LEVEL,
-        requires: { atk: 3 },
+        requires: { atk: 2.5 },
         drain: { energy: 0.6, health: 0.6 },
         duration: 15,
         loot: [
