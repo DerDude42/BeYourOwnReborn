@@ -378,12 +378,12 @@ function updateBattleView() {
     if (!b) { if (!ui.battle.hidden) ui.battle.hidden = true; return; }
     if (ui.battle.hidden) return;
     const cfg = battleById(b.id);
-    const enemy = cfg.enemies[Math.min(b.idx, cfg.enemies.length - 1)];
+    const enemy = b.enemies[Math.min(b.idx, b.enemies.length - 1)];
     const E = ui.bEl;
     const hp = state.resources.health.current, maxHp = resMax("health");
     const pct = (v) => Math.max(0, Math.min(100, v * 100)).toFixed(1) + '%';
     setText(E['battle-room-name'], cfg.name);
-    setText(E['battle-room-count'], `${Math.min(b.over && b.result === "win" ? cfg.enemies.length : b.idx + 1, cfg.enemies.length)} / ${cfg.enemies.length}`);
+    setText(E['battle-room-count'], `${Math.min(b.over && b.result === "win" ? b.enemies.length : b.idx + 1, b.enemies.length)} / ${b.enemies.length}`);
     setText(E['b-enemy-name'], enemy.name);
     E['b-you-hp'].style.width = pct(hp / maxHp);
     setText(E['b-you-hp-text'], `${fmt(hp)} / ${fmt(maxHp)}`);
@@ -417,7 +417,7 @@ function updateMenus() {
         if (c.btn.hidden === shown) c.btn.hidden = !shown;
         if (!shown) continue;
         const running = !!state.battle && state.battle.id === bc.id && !state.battle.over;
-        const en = bc.enemies.map(e => `${e.name} (${fmt(e.hp)} HP, ${fmt(e.atk)} ATK, ${fmt(e.speed)}/Tick)`).join(", ");
+        const en = bc.enemies.map(e => scaledEnemy(bc, e)).map(e => `${e.name} (${fmt(e.hp)} HP, ${fmt(e.atk)} ATK, ${fmt(e.speed)}/Tick)`).join(", ");
         setText(c.right, running ? "● Läuft – zurück zum Kampf" : "Start");
         setText(c.extra, ` · Gegner: ${en} · Siege: ${state.wins[bc.id] || 0}`);
         c.btn.classList.toggle('running', running);
@@ -429,9 +429,10 @@ function updateMenus() {
         const row = e.nm.parentNode;
         setText(e.nm, seen ? e.en.name : "???");
         setText(e.info, seen
-            ? `${fmt(e.en.hp)} HP · ${fmt(e.en.atk)} ATK · ${fmt(e.en.speed)}/Tick · Besiegt: ${seen.kills} · Beute: ${lootText(e.bc.loot || [])}`
+            ? `${fmt(scaledEnemy(e.bc, e.en).hp)} HP · ${fmt(scaledEnemy(e.bc, e.en).atk)} ATK · ${fmt(e.en.speed)}/Tick · Besiegt: ${seen.kills} · Beute: ${lootText(e.bc.loot || [])}`
             : "Noch nicht begegnet");
     }
+    updateChronik();
     // Pets
     const pu = petsUnlocked();
     if (ui.petTab.hidden === pu) ui.petTab.hidden = !pu;
@@ -473,8 +474,7 @@ function updateMenus() {
         c.btn.classList.toggle('running', running);
         let pct = 0;
         if (a.skill) {
-            const sk = skillOf(a.id);
-            pct = sk.xp / skillNeed(sk.level) * 100;
+            pct = skillPct(a.id);
         } else if (a.duration) {
             pct = Math.min(100, (state.runTicks[a.id] || 0) / a.duration * 100);
         }
@@ -540,6 +540,7 @@ function showTab(name) {
     currentTab = name;
     if (name === 'inventory' && ui.invTab) ui.invTab.classList.remove('flash');
     if (name === 'pets' && ui.petTab) ui.petTab.classList.remove('glow');
+    if (name === 'chronik' && ui.chronikTab) ui.chronikTab.classList.remove('glow');
     document.querySelectorAll('.tab-panel').forEach(p => { p.hidden = p.id !== 'tab-' + name; });
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
 }

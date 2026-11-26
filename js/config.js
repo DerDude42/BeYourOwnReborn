@@ -134,7 +134,7 @@ const FORCED_SLEEP_TICKS = 5;      // Zwangsschlaf bei 0 Gesundheit: so viele Ti
 const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
 const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
 const CRIT_MULT = 3;               // Bei einem Crit wird das Ergebnis x3
-const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked", "caveFound", "fameCap25"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
+const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked", "caveFound", "fameCap25", "fameCap45", "fameCap70", "fameCap100", "chronikOpen"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
 const BASE_ATK = 1;                // Grund-Angriff (+ Items + Ganzkörpertraining)
 
 // Beute-Gegenstände (landen in state.loot und in den Stats)
@@ -217,6 +217,7 @@ const BATTLE_CONFIG = [
     },
     {
         id: "cave",
+        scale: true, // wird mit jeder Seite stärker
         name: "Wolfshöhle",
         desc: "Kampf gegen einen Wolf. Entdeckt nach 5x Patrouille. Mit voller Ausrüstung aber ohne ausreichendes Training verlierst du knapp.",
         visible: () => usesOf("patrol") >= 5,
@@ -230,8 +231,6 @@ const BATTLE_CONFIG = [
 ];
 
 /* ---- Skills (Meditation, Ausruhen): 1 Tick Ausführung = 1 XP ---- */
-const SKILL_BASE_NEED = 100;        // Ausführungen für Level 1
-const SKILL_NEED_GROWTH = 1.15;     // Bedarf steigt je Level um 15 %
 
 /* ---- Tick-System: 1 Tick = eine Spiel-Runde; Basis ist 1 Tick pro Sekunde ---- */
 const BASE_TICKS_PER_SEC = 1;
@@ -315,6 +314,7 @@ const ACTIVITY_CONFIG = [
     },
     {
         id: "labor",
+        jobIncome: true,
         tab: "loop",
         name: "Lohnarbeit",
         desc: "Arbeiten gegen Bezahlung. Wiederholt sich, solange die Ressourcen reichen. Die ersten 3 Abschlüsse geben je +1 max. Gesundheit und +1 max. Energie.",
@@ -329,6 +329,7 @@ const ACTIVITY_CONFIG = [
     },
     {
         id: "kitchen",
+        jobIncome: true,
         tab: "loop",
         name: "Küchenhilfe",
         desc: `Hilft in der Küche und bringt Essen. Nach ${KITCHEN_KNIFE_USES} Abschlüssen bekommst du ein Küchenmesser. Muss nach jedem Abschluss neu gestartet werden.`,
@@ -406,6 +407,7 @@ const ACTIVITY_CONFIG = [
     },
     {
         id: "patrol",
+        jobIncome: true,
         tab: "loop",
         name: "Patrouille",
         desc: "Dreht eine Runde durchs Dorf. Freigeschaltet nach 5 Besuchen beim Dorfvorsteher. Wiederholt sich, solange die Ressourcen reichen.",
@@ -505,16 +507,17 @@ const ACTIVITY_CONFIG = [
         id: "reportEntrance",
         tab: "training",
         name: "Bericht an den Dorfvorsteher: Eingang",
-        desc: "Berichte vom Eingang, der sich nicht öffnen lässt.",
+        desc: "Berichte vom Eingang, der sich nicht öffnen lässt. Harwin weiß mehr über den Tempel, als er bisher gesagt hat.",
         visible: () => usesOf("temple") >= 5,
         duration: 5,
         maxUses: 1,
         noCrit: true,
         onComplete: () => {
-            const msg = "Der Dorfvorsteher kennt keinen Weg hinein. Vorerst bleibt der Tempel verschlossen.";
+            state.flags.chronikOpen = true;
+            const msg = "Harwin kennt die Legende: Drei Siegelsteine halten die Pforte verschlossen. Und er zeigt dir die Chronik.";
             setStatus(msg);
             showToast(msg);
-            return "Noch offen";
+            return "Chronik freigeschaltet";
         },
         info: () => `Dauer 5 Ticks`
     },
@@ -586,8 +589,6 @@ const STAT_CONFIG = [
     { label: "Gesundheits-Regeneration", get: () => `${fmt(regenOf("health") * regenFactor())}/Tick` },
     { label: "Energie-Regeneration", get: () => `${fmt(regenOf("energy") * regenFactor() + regenFlat())}/Tick` },
     { label: "Gold",                 get: () => `${Math.floor(state.resources.money.current + 1e-9)}/${resMax("money")}` },
-    { label: "Meditation (Skill)",   get: () => skillText("meditation") },
-    { label: "Ausruhen (Skill)",     get: () => skillText("sleep") },
     { label: "Ganzkörper-Level",     get: () => `${usesOf("fullbody")}/${activityById("fullbody").maxUses}` },
     { label: "Ruhm",                 get: () => `${Math.floor(state.resources.fame.current + 1e-9)}/${resMax("fame")}` },
     { label: "Übungskampf",          get: () => `${usesOf("sparring")}/${activityById("sparring").maxUses}` },

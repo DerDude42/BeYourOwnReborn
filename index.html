@@ -60,6 +60,26 @@
             </section>
         </div>
 
+        <div class="tab-panel" id="tab-chronik" hidden>
+            <section class="card">
+                <h2 class="card-title">Fähigkeiten</h2>
+                <div class="btn-list" id="skill-list"></div>
+            </section>
+            <section class="card">
+                <h2 class="card-title">Neue Seite</h2>
+                <p class="btn-desc" id="eternal-info"></p>
+                <div class="btn-list" id="prestige-list"></div>
+            </section>
+            <section class="card">
+                <h2 class="card-title">Vermächtnisse</h2>
+                <div class="btn-list" id="legacy-list"></div>
+            </section>
+            <section class="card">
+                <h2 class="card-title">Geschichte</h2>
+                <div id="story-list"></div>
+            </section>
+        </div>
+
         <div class="tab-panel" id="tab-inventory" hidden>
             <section class="card">
                 <h2 class="card-title">Ausrüstung</h2>
@@ -107,6 +127,7 @@
         <button type="button" class="tab-btn" data-tab="training">Training</button>
         <button type="button" class="tab-btn" data-tab="combat" id="tab-btn-combat" hidden>Kampf</button>
         <button type="button" class="tab-btn" data-tab="pets" id="tab-btn-pets" hidden>Pets</button>
+        <button type="button" class="tab-btn" data-tab="chronik" id="tab-btn-chronik" hidden>Chronik</button>
         <button type="button" class="tab-btn" data-tab="inventory">Inventar</button>
         <button type="button" class="tab-btn" data-tab="stats">Stats</button>
     </nav>
@@ -147,8 +168,13 @@
     <div id="toast" class="toast" role="status"></div>
 
     <script src="js/config.js" defer></script>
+    <script src="js/regions.js" defer></script>
     <script src="js/engine.js" defer></script>
+    <script src="js/skills.js" defer></script>
+    <script src="js/prestige.js" defer></script>
+    <script src="js/story.js" defer></script>
     <script src="js/ui.js" defer></script>
+    <script src="js/chronik.js" defer></script>
     <script src="js/save.js" defer></script>
     <script src="js/main.js" defer></script>
 </body>

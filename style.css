@@ -435,3 +435,9 @@ footer {
     color: var(--text-muted);
     flex-shrink: 0;
 }
+
+/* Chronik */
+.story-chapter { margin: 14px 0 6px; font-size: 0.95rem; color: var(--accent, #c9a86a); }
+.story-entry { padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.story-title { font-weight: 600; }
+.story-text { display: block !important; opacity: 0.85; }

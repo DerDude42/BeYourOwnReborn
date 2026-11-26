@@ -21,7 +21,9 @@ function saveGame() {
         incubation: state.incubation ? { ...state.incubation } : null,
         bestiary: JSON.parse(JSON.stringify(state.bestiary)),
         seenItems: { ...state.seenItems },
-        skills: JSON.parse(JSON.stringify(state.skills))
+        skills: JSON.parse(JSON.stringify(state.skills)),
+        meta: JSON.parse(JSON.stringify(state.meta)),
+        story: { ...state.story }
     };
     for (const key of Object.keys(RESOURCE_CONFIG)) {
         payload.resources[key] = { current: state.resources[key].current };
@@ -121,12 +123,32 @@ function applySave(parsed) {
             if (names.has(name) && v && Number.isInteger(v.kills) && v.kills >= 0 && v.kills <= 1e6) state.bestiary[name] = { kills: v.kills };
         }
     }
+    // Prestige-Daten und Geschichte
+    state.meta = defaultMeta(); state.story = {};
+    const pm = parsed.meta;
+    if (pm && typeof pm === 'object') {
+        const num = (v) => Number.isFinite(v) && v >= 0 && v <= 1e9 ? Math.floor(v) : 0;
+        state.meta.eternal = num(pm.eternal);
+        state.meta.spent = Math.min(num(pm.spent), state.meta.eternal);
+        state.meta.pages = Math.min(num(pm.pages), 1000);
+        if (pm.legacy && typeof pm.legacy === 'object') {
+            for (const l of LEGACY_CONFIG) {
+                const lv = pm.legacy[l.id];
+                if (Number.isInteger(lv) && lv > 0) state.meta.legacy[l.id] = Math.min(lv, l.max);
+            }
+        }
+    }
+    if (parsed.story && typeof parsed.story === 'object') {
+        for (const e of STORY_CONFIG) if (parsed.story[e.id] === true) state.story[e.id] = true;
+    }
     // Skills
     if (parsed.skills && typeof parsed.skills === 'object') {
-        for (const a of ACTIVITY_CONFIG.filter(x => x.skill)) {
-            const sk = parsed.skills[a.id];
+        for (const cfg of SKILL_CONFIG) {
+            const sk = parsed.skills[cfg.id];
             if (sk && Number.isInteger(sk.level) && sk.level >= 0 && sk.level <= 1000 && typeof sk.xp === 'number' && Number.isFinite(sk.xp) && sk.xp >= 0) {
-                state.skills[a.id] = { level: sk.level, xp: Math.min(Math.floor(sk.xp), skillNeed(sk.level) - 1) };
+                const tier = Number.isInteger(sk.tier) && sk.tier >= 0 && sk.tier < SKILL_TIER_FACTOR.length ? sk.tier : 0;
+                const level = Math.min(sk.level, SKILL_TIER_CAP);
+                state.skills[cfg.id] = { tier, level, xp: level >= SKILL_TIER_CAP ? 0 : Math.min(sk.xp, skillNeed(level, tier) - 1) };
             }
         }
     }

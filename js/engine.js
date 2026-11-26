@@ -29,7 +29,9 @@ function initDefaultState() {
     state.incubation = null; // { pet, left, total }
     state.bestiary = {};   // Gegnername -> { kills }
     state.seenItems = {};  // Inventar-Zeilen, die schon einmal besessen wurden (bleiben sichtbar)
-    state.skills = {};     // Skill-ID -> { level, xp }
+    state.skills = {};     // Skill-ID -> { level, xp, tier }
+    state.meta = defaultMeta(); // bleibt beim Prestige erhalten: Ewiger Ruhm, Seiten, Vermächtnisse
+    state.story = {};      // freigeschaltete Geschichts-Einträge (bleiben beim Prestige erhalten)
     state.ticksPerSec = BASE_TICKS_PER_SEC; // Spielgeschwindigkeit (Regler in den Stats)
     for (const u of UPGRADE_CONFIG) state.upgrades[u.id] = 0;
     for (const [key, cfg] of Object.entries(RESOURCE_CONFIG)) {
@@ -216,12 +218,19 @@ function startBattle(id) {
     tick();
     if (state.resources.health.current <= 1e-9) { showToast("Zu wenig Gesundheit für einen Kampf"); return; }
     for (const other of [...state.active]) stopActivity(other);
-    state.battle = { id, idx: 0, enemyHp: cfg.enemies[0].hp, pProg: 0, petProg: 0, eProg: 0, log: [], over: false, result: "" };
+    const enemies = cfg.enemies.map(e => scaledEnemy(cfg, e));
+    state.battle = { id, idx: 0, enemies, enemyHp: enemies[0].hp, pProg: 0, petProg: 0, eProg: 0, log: [], over: false, result: "" };
     blog(`Du betrittst: ${cfg.name}.`);
-    blog(`${cfg.enemies[0].name} erscheint.`);
-    seeEnemy(cfg.enemies[0].name);
+    blog(`${enemies[0].name} erscheint.`);
+    seeEnemy(enemies[0].name);
     ui.battle.hidden = false;
     updateUI();
+}
+// Gegner einer Region/des Wolfs werden mit jeder Seite stärker
+function scaledEnemy(cfg, e) {
+    if (!cfg.scale) return { ...e };
+    const k = enemyScale();
+    return { ...e, hp: Math.round(e.hp * k), atk: Math.round(e.atk * k * 100) / 100 };
 }
 function onBattleClick(id) {
     if (state.battle && state.battle.id === id && !state.battle.over) { ui.battle.hidden = false; updateUI(); return; }
@@ -232,7 +241,7 @@ function battleTick() {
     const b = state.battle;
     if (!b || b.over) return;
     const cfg = battleById(b.id);
-    const enemy = () => cfg.enemies[b.idx];
+    const enemy = () => b.enemies[b.idx];
 
     // Schaden am Gegner; kümmert sich um Sieg bzw. nächsten Gegner
     const hitEnemy = (dmg, who) => {
@@ -243,7 +252,7 @@ function battleTick() {
         seeEnemy(enemy().name);
         state.bestiary[enemy().name].kills += 1;
         b.idx += 1;
-        if (b.idx >= cfg.enemies.length) {
+        if (b.idx >= b.enemies.length) {
             b.over = true;
             b.result = "win";
             state.wins[b.id] = (state.wins[b.id] || 0) + 1;
@@ -262,6 +271,7 @@ function battleTick() {
         }
     };
 
+    addSkillXp("combat");
     b.pProg += attackSpeed();
     while (b.pProg >= 1 && !b.over) { b.pProg -= 1; hitEnemy(atk(), "Du"); }
 
@@ -270,7 +280,7 @@ function battleTick() {
         b.petProg += pet.speed;
         while (b.petProg >= 1 && !b.over) { b.petProg -= 1; hitEnemy(pet.atk, pet.name); }
     }
-    if (b.over) { b.idx = Math.min(b.idx, cfg.enemies.length - 1); return; }
+    if (b.over) { b.idx = Math.min(b.idx, b.enemies.length - 1); return; }
 
     b.eProg += enemy().speed;
     while (b.eProg >= 1 && !b.over) {
@@ -306,6 +316,7 @@ function gameTick() {
     }
     incubationTick();
     if (state.battle) battleTick();
+    storyCheck();
     if (state.resources.health.current <= 1e-9 && !isActive("sleep")) forceSleep();
 }
 
@@ -436,6 +447,8 @@ function itemBonus(name) {
     }
     const pet = activePetCfg();
     if (pet) total += pet.effects[name] || 0;
+    total += skillBonus(name);
+    total += legacyBonus(name);
     return total;
 }
 
@@ -526,23 +539,6 @@ function onSlotClick(slot) {
     ui.picker.hidden = false;
 }
 
-/* ---- Skills ---- */
-function skillOf(id) { return state.skills[id] || (state.skills[id] = { level: 0, xp: 0 }); }
-function skillNeed(level) { return Math.ceil(SKILL_BASE_NEED * Math.pow(SKILL_NEED_GROWTH, level)); }
-function skillText(id) {
-    const s = skillOf(id);
-    return `Lv ${s.level} · XP ${s.xp}/${skillNeed(s.level)}`;
-}
-function addSkillXp(id) {
-    const s = skillOf(id);
-    s.xp += 1;
-    while (s.xp >= skillNeed(s.level)) {
-        s.xp -= skillNeed(s.level);
-        s.level += 1;
-        setStatus(`${activityById(id).name}: Level ${s.level} erreicht!`);
-    }
-}
-
 // Verbrauch pro Tick inkl. Item-Boni (z. B. T-Shirt beim Jagen)
 function drainOf(activity) {
     const out = {};
@@ -561,7 +557,11 @@ function resMax(key) {
         if (a.levelBonus && a.levelBonus[key]) max += Math.min(usesOf(a.id), a.bonusUses != null ? a.bonusUses : Infinity) * a.levelBonus[key];
     }
     max += itemBonus("max" + key.charAt(0).toUpperCase() + key.slice(1)); // z. B. maxEnergy
-    if (key === "fame" && state.flags.fameCap25) max += 5; // Belohnung "Bericht: Tempel"
+    if (key === "fame") { // Berichte an den Dorfvorsteher erweitern den möglichen Ruhm, jede Seite zusätzlich
+        for (const [flag, add] of Object.entries(FAME_CAP_FLAGS)) if (state.flags[flag]) max += add;
+        max += PAGE_FAME_BONUS * state.meta.pages;
+    }
+    if (key === "health" || key === "energy") max *= 1 + eternalPct(); // passiver Bonus des Ewigen Ruhms
     return max;
 }
 
@@ -575,7 +575,7 @@ function rewardOf(action) {
     const out = {};
     for (const [key, amount] of Object.entries(action.reward || {})) {
         const bonusName = action.bonus && action.bonus[key];
-        out[key] = amount + (bonusName ? itemBonus(bonusName) : 0);
+        out[key] = (amount + (bonusName ? itemBonus(bonusName) : 0)) * (key === "money" ? goldMult() : 1);
     }
     return out;
 }
@@ -625,7 +625,7 @@ function atk() {
     for (const a of ACTIVITY_CONFIG) {
         if (a.atkPerUse) total += usesOf(a.id) * a.atkPerUse;
     }
-    return total;
+    return total * (1 + eternalPct() * ETERNAL_ATK_SHARE);
 }
 
 // Liefert einen Hinweistext, wenn eine Voraussetzung fehlt, sonst ""
@@ -664,7 +664,7 @@ function rollLoot(table, mult = 1) {
         for (const [key, amount] of Object.entries(entry.give || {})) {
             const res = state.resources[key];
             const before = res.current;
-            res.current = clampRes(key, res.current + amount * mult);
+            res.current = clampRes(key, res.current + amount * mult * (key === "money" ? goldMult() : 1));
             parts.push(`+${fmt(res.current - before, 0)} ${RESOURCE_CONFIG[key].name}`);
         }
         if (entry.item) {
@@ -805,7 +805,7 @@ function runActivity(activity) {
         state.resources[key].current = clampRes(key, state.resources[key].current + perTick);
     }
     if (activity.onTick) activity.onTick();
-    if (activity.skill) addSkillXp(activity.id);
+    skillsTick(activity);
 
     if (activity.duration) {
         state.runTicks[activity.id] = (state.runTicks[activity.id] || 0) + 1;
@@ -824,6 +824,10 @@ function completeActivity(activity) {
     if (crit) {
         const levels = activity.maxUses != null ? ` +${state.uses[activity.id] - before} Level` : "";
         text = `★ Kritisch x${CRIT_MULT}!${levels}${text ? " " + text : ""}`;
+    }
+    if (activity.jobIncome) { // Arbeits-Fähigkeit: zusätzliches Gold je Abschluss
+        const extra = itemBonus("jobGold") * goldMult();
+        if (extra > 0) { state.resources.money.current = clampRes("money", state.resources.money.current + extra); text += ` +${fmt(extra)} Gold (Arbeit)`; }
     }
     state.lastResult[activity.id] = text;
     checkUnlocks();

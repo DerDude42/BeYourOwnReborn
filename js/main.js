@@ -5,6 +5,7 @@ loadGame();
 lastTick = Date.now();
 buildUI();
 buildMenus();
+buildChronik();
 initTabs();
 updateUI();
 updateClock();
