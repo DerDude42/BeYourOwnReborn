@@ -441,3 +441,13 @@ footer {
 .story-entry { padding: 6px 0; border-top: 1px solid rgba(255,255,255,0.08); }
 .story-title { font-weight: 600; }
 .story-text { display: block !important; opacity: 0.85; }
+
+/* Fähigkeiten: Zusatzinfos nur bei Hover (Maus) bzw. langem Drücken (Touch) */
+.skill-btn { -webkit-touch-callout: none; user-select: none; }
+.skill-btn .btn-help, .skill-btn .btn-cost { display: none; }
+.skill-btn.long-open .btn-help, .skill-btn.long-open .btn-cost { display: block; }
+@media (hover: hover) {
+    .skill-btn:hover .btn-help, .skill-btn:hover .btn-cost { display: block; }
+}
+.skill-btn .btn-desc { margin-top: 0; }
+.skill-btn.long-open .btn-desc { margin-top: 6px; }

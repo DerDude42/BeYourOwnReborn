@@ -198,6 +198,7 @@ function lootText(table) {
     }).join(" · ");
 }
 
+function fillFame() { state.resources.fame.current = resMax("fame"); }
 function winsOf(id) { return state.wins[id] || 0; }
 function attackSpeed() { return BASE_ATTACK_SPEED + itemBonus("attackSpeed"); }
 function battleById(id) { return BATTLE_CONFIG.find(b => b.id === id); }
@@ -424,7 +425,7 @@ function buyItem(itemId) {
         state.resources[resKey].current -= amount;
     }
     state.inventory[item.id] = ownedCount(item) + 1;
-    autoEquip(item.id);
+    offerEquip(item.id);
 
     updateUI();
     saveGame();
@@ -472,6 +473,24 @@ function autoEquip(id) {
     if (!g || g.manual || gearCount(id) <= 0 || isEquipped(id)) return;
     const free = slotsOfGroup(g.slot).find(k => !state.equipped[k]);
     if (free) state.equipped[free] = id;
+}
+// Neues Gear: im Browser fragt ein Dialog nach (mit Vergleich), ohne Oberfläche (Tests/Bot) wird direkt angelegt
+const HAS_DIALOGS = typeof window !== 'undefined' && typeof window.innerWidth === 'number';
+const equipOffers = [];
+function offerEquip(id) {
+    const g = GEAR[id];
+    if (!g || g.manual || gearCount(id) <= 0 || isEquipped(id)) return;
+    if (!HAS_DIALOGS) { autoEquip(id); return; }
+    if (!equipOffers.includes(id)) equipOffers.push(id);
+    showNextEquipOffer();
+}
+// Ziel-Slot für ein neues Teil: freier Slot, sonst der mit dem schwächsten Teil
+function effectSum(id) { const e = (GEAR[id] && GEAR[id].effects) || {}; return Object.values(e).reduce((a, v) => a + v, 0); }
+function targetSlotFor(id) {
+    const slots = slotsOfGroup(GEAR[id].slot);
+    const free = slots.find(k => !state.equipped[k]);
+    if (free) return free;
+    return slots.slice().sort((a, b) => effectSum(state.equipped[a]) - effectSum(state.equipped[b]))[0];
 }
 function autoEquipAll() { for (const id of Object.keys(GEAR)) autoEquip(id); }
 // Setzt (oder leert mit null) einen Slot; ein Item wandert dabei aus seinem alten Slot
@@ -674,7 +693,7 @@ function rollLoot(table, mult = 1) {
             const n = Math.min((entry.amount || 1) * mult, room);
             if (n <= 0) continue; // Limit erreicht: nichts mehr zu finden
             state.loot[entry.item] = have + n;
-            autoEquip(entry.item);
+            offerEquip(entry.item);
             if (PET_CONFIG.some(p => p.egg === entry.item)) notifyPetTab();
             parts.push(`${n}x ${it.name}`);
         }

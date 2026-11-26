@@ -134,6 +134,7 @@ const FORCED_SLEEP_TICKS = 5;      // Zwangsschlaf bei 0 Gesundheit: so viele Ti
 const FORCED_SLEEP_FACTOR = 0.5;   // ... und dieser Rate (50 %)
 const BASE_CRIT_CHANCE = 0.05;     // Crit-Chance aller Nicht-Loop-Aktionen zu Beginn (+ itemBonus("crit"))
 const CRIT_MULT = 3;               // Bei einem Crit wird das Ergebnis x3
+const PATROL_FAME_USES = 5;     // nur die ersten Patrouillen geben Ruhm
 const FLAGS = ["foodDrain", "foxTailFound", "combatUnlocked", "houseFame", "showMaxed", "petsUnlocked", "caveFound", "fameCap25", "fameCap45", "fameCap70", "fameCap100", "chronikOpen"];       // Freischaltbare Schalter (z. B. später über Automatisierung)
 const BASE_ATK = 1;                // Grund-Angriff (+ Items + Ganzkörpertraining)
 
@@ -332,10 +333,11 @@ const ACTIVITY_CONFIG = [
         jobIncome: true,
         tab: "loop",
         name: "Küchenhilfe",
-        desc: `Hilft in der Küche und bringt Essen. Nach ${KITCHEN_KNIFE_USES} Abschlüssen bekommst du ein Küchenmesser. Muss nach jedem Abschluss neu gestartet werden.`,
+        desc: `Hilft in der Küche und bringt Essen. Nach ${KITCHEN_KNIFE_USES} Abschlüssen bekommst du ein Küchenmesser. Wiederholt sich, solange die Ressourcen reichen.`,
         visible: () => (state.inventory.apron || 0) > 0 || usesOf("kitchen") > 0,
         drain: { energy: 1 },
         duration: 10,
+        repeat: true,
         gain: () => ({ food: 0.2 + statBonus("kitchenFood") }),
         onComplete: () => rollLoot([
             { chance: 1, give: { money: 4 } },
@@ -392,7 +394,7 @@ const ACTIVITY_CONFIG = [
             }
             return text;
         },
-        info: () => `Benötigt Angriff 3 (du: ${fmt(atk())}) · Dauer 15 Ticks · -0,6 Energie/Tick · -0,6 Gesundheit/Tick · beim ersten Mal +5 Ruhm`
+        info: () => `Benötigt Angriff 2,5 (du: ${fmt(atk())}) · Dauer 15 Ticks · -0,6 Energie/Tick · -0,6 Gesundheit/Tick · beim ersten Mal +5 Ruhm`
     },
     {
         id: "elder",
@@ -403,7 +405,8 @@ const ACTIVITY_CONFIG = [
         drain: { energy: 0.5 },
         duration: 20,
         maxUses: 5,
-        info: () => `Level ${usesOf("elder")}/5 · -0,5 Energie/Tick (10 Energie je Besuch) · Dauer 20 Ticks`
+        onComplete: () => rollLoot([{ chance: 1, give: { fame: 1 } }]),
+        info: () => `Level ${usesOf("elder")}/5 · -0,5 Energie/Tick (10 Energie je Besuch) · Dauer 20 Ticks · +1 Ruhm je Besuch`
     },
     {
         id: "patrol",
@@ -416,11 +419,11 @@ const ACTIVITY_CONFIG = [
         duration: 10,
         repeat: true,
         onComplete: () => rollLoot([
-            { chance: 1, give: { fame: 1 } },
+            { chance: 1, give: { fame: 1 }, when: () => usesOf("patrol") + 1 <= PATROL_FAME_USES }, // usesOf zählt erst nach onComplete hoch
             { chance: 1, give: { money: 10 } },
             { chance: 0.2, item: "helm", amount: 1 }
         ]),
-        info: () => `-0,5 Gesundheit/Tick · -1 Energie/Tick · -0,1 Essen/Tick · Dauer 10 Ticks · +1 Ruhm, +10 Gold, 20 % Helm`
+        info: () => `-0,5 Gesundheit/Tick · -1 Energie/Tick · -0,1 Essen/Tick · Dauer 10 Ticks · +10 Gold, 20 % Helm · +1 Ruhm nur bei den ersten ${PATROL_FAME_USES} Runden (${Math.min(usesOf("patrol"), PATROL_FAME_USES)}/${PATROL_FAME_USES})`
     },
     // ---- Questkette nach dem Wolf: Dorfvorsteher -> Wald -> Tempel (Dauer/Kosten der Berichte und des Tempels sind Annahmen) ----
     {
@@ -465,17 +468,18 @@ const ACTIVITY_CONFIG = [
         id: "reportTemple",
         tab: "training",
         name: "Bericht an den Dorfvorsteher: Tempel",
-        desc: "Berichte vom gefundenen Tempel. Belohnung: Maximaler Ruhm steigt auf 25. Schaltet Tempel untersuchen frei.",
+        desc: "Berichte vom gefundenen Tempel. Belohnung: Maximaler Ruhm steigt auf 25 und dein Ruhm wird aufgefüllt. Schaltet Tempel untersuchen frei.",
         visible: () => usesOf("forest") >= 5,
         duration: 5,
         maxUses: 1,
         noCrit: true,
         onComplete: () => {
             state.flags.fameCap25 = true;
-            showToast("Maximaler Ruhm auf 25 erhöht");
-            return "Max. Ruhm 25";
+            fillFame();
+            showToast("Der Dorfvorsteher lobt dich: Ruhm auf 25");
+            return "Max. Ruhm 25 · Ruhm aufgefüllt";
         },
-        info: () => `Dauer 5 Ticks · Belohnung: max. Ruhm 25`
+        info: () => `Dauer 5 Ticks · Belohnung: max. Ruhm 25, Ruhm wird aufgefüllt`
     },
     {
         id: "temple",

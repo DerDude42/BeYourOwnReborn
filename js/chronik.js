@@ -1,6 +1,21 @@
 /* =================================================================
    CHRONIK-TAB: Fähigkeiten, Ewiger Ruhm / neue Seite, Vermächtnisse, Geschichte
    ================================================================= */
+// Mobil: Zusatzinfos bleiben verborgen; langes Drücken (Finger auflegen) blendet sie ein
+function makeLongPressInfo(btn) {
+    btn.classList.add('skill-btn');
+    let timer = null, fired = false;
+    const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    btn.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        fired = false; cancel();
+        timer = setTimeout(() => { fired = true; btn.classList.toggle('long-open'); }, 450);
+    });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'pointermove']) btn.addEventListener(ev, cancel);
+    btn.addEventListener('click', (e) => { if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
 function buildChronik() {
     ui.chronikTab = document.getElementById('tab-btn-chronik');
     ui.chronik = { skills: {}, legacy: {}, storyRows: {}, confirm: false };
@@ -10,6 +25,7 @@ function buildChronik() {
     for (const cfg of SKILL_CONFIG) {
         const b = createCardButton(cfg.names[0], () => evolveSkill(cfg.id), 'btn-reward');
         skillList.appendChild(b.btn);
+        makeLongPressInfo(b.btn);
         c.skills[cfg.id] = b;
     }
 
@@ -27,6 +43,7 @@ function buildChronik() {
         legList.appendChild(b.btn);
         c.legacy[l.id] = b;
     }
+    for (const a of ACTIVITY_CONFIG) if (a.skill && ui.act[a.id]) makeLongPressInfo(ui.act[a.id].btn);
     c.storyBox = document.getElementById('story-list');
 }
 

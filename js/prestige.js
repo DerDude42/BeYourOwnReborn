@@ -3,25 +3,25 @@
    Ewiger Ruhm gibt dauerhaft einen passiven Bonus und lässt sich in Vermächtnisse investieren.
    Erhalten bleiben: Ewiger Ruhm, Vermächtnisse, Fähigkeiten, Pets, Bestiarium, Geschichte.
    ================================================================= */
-const ETERNAL_PCT_FIRST = 0.005;   // +0,5 % max. Gesundheit/Energie und Gold je Ewigem Ruhm (bis 100)
-const ETERNAL_PCT_AFTER = 0.00125; // danach nur noch +0,125 % je Ewigem Ruhm
-const ETERNAL_PER_FAME = 0.4;      // Ewiger Ruhm je Ruhmpunkt
-const ETERNAL_PER_BOSS = 4;        // zusätzlich je besiegtem Regions-Boss
-const ETERNAL_FINALE = 10;         // zusätzlich für den Tempelwächter
+const ETERNAL_PCT_FIRST = 0.006;   // +0,6 % max. Gesundheit/Energie und Gold je Ewigem Ruhm (bis 100)
+const ETERNAL_PCT_AFTER = 0.0015; // danach nur noch +0,15 % je Ewigem Ruhm
+const ETERNAL_PER_FAME = 1;      // Ewiger Ruhm je Ruhmpunkt
+const ETERNAL_PER_BOSS = 6;        // zusätzlich je besiegtem Regions-Boss
+const ETERNAL_FINALE = 15;         // zusätzlich für den Tempelwächter
 const ETERNAL_ATK_SHARE = 0.5;      // Ewiger Ruhm wirkt zur Hälfte auch auf den Angriff
 const PAGE_FAME_BONUS = 10;        // max. Ruhm je abgeschlossener Seite
 // max. Ruhm wächst mit den Berichten an den Dorfvorsteher: 20 -> 25 -> 45 -> 70 -> 100
 const FAME_CAP_FLAGS = { fameCap25: 5, fameCap45: 20, fameCap70: 25, fameCap100: 30 };
-const PAGE_ENEMY_SCALE = 0.1;      // Gegner werden je Seite um 10 % stärker (nur Regionen und Wolf)
+const PAGE_ENEMY_SCALE = 0.12;      // Gegner werden je Seite um 12 % stärker (Zinseszins; nur Regionen und Wolf)
 
 // effects: Bonus je Stufe (über itemBonus abfragbar) | Erbstücke und Narben wirken beim Start einer Seite
 const LEGACY_CONFIG = [
-    { id: "beg",      name: "Bettlerroutine",  desc: "Betteln bringt +0,25 Gold mehr je Stufe.", max: 5,  costs: [3, 6, 9, 12, 15], effects: { begBonus: 0.25 } },
-    { id: "heirloom", name: "Erbstücke",       desc: "Du beginnst jede Seite mit Ausrüstung. Stufe 1: Küchenschürze, 2: Küchenmesser, 3: Geldbörse Stufe 3, 4: Hemd, Hose, Handschuhe und Schuhe.", max: 4, costs: [5, 10, 20, 40] },
-    { id: "scars",    name: "Alte Narben",     desc: "Du beginnst jede Seite mit 2 Ganzkörper-Leveln mehr je Stufe.", max: 5, costs: [4, 8, 12, 16, 20] },
-    { id: "learner",  name: "Wissensdurst",    desc: "+10 % Fähigkeiten-XP je Stufe.", max: 10, costs: [6, 6, 9, 9, 12, 12, 15, 15, 18, 18] },
-    { id: "soul",     name: "Kräftige Seele",  desc: "+1 max. Gesundheit und +1 max. Energie je Stufe.", max: 10, costs: [3, 5, 7, 9, 11, 13, 15, 17, 19, 21], effects: { maxHealth: 1, maxEnergy: 1 } },
-    { id: "purse",    name: "Prall gefüllter Beutel", desc: "+10 max. Gold je Stufe.", max: 8, costs: [2, 4, 6, 8, 10, 12, 14, 16], effects: { maxMoney: 10 } }
+    { id: "beg",      name: "Bettlerroutine",  desc: "Betteln bringt +0,25 Gold mehr je Stufe.", max: 5,  costs: [9, 18, 27, 36, 45], effects: { begBonus: 0.25 } },
+    { id: "heirloom", name: "Erbstücke",       desc: "Du beginnst jede Seite mit Ausrüstung. Stufe 1: Küchenschürze, 2: Küchenmesser, 3: Geldbörse Stufe 3, 4: Hemd, Hose, Handschuhe und Schuhe.", max: 4, costs: [15, 30, 60, 120] },
+    { id: "scars",    name: "Alte Narben",     desc: "Du beginnst jede Seite mit 2 Ganzkörper-Leveln mehr je Stufe.", max: 5, costs: [12, 24, 36, 48, 60] },
+    { id: "learner",  name: "Wissensdurst",    desc: "+10 % Fähigkeiten-XP je Stufe.", max: 10, costs: [18, 18, 27, 27, 36, 36, 45, 45, 54, 54] },
+    { id: "soul",     name: "Kräftige Seele",  desc: "+1 max. Gesundheit und +1 max. Energie je Stufe.", max: 10, costs: [9, 15, 21, 27, 33, 39, 45, 51, 57, 63], effects: { maxHealth: 1, maxEnergy: 1 } },
+    { id: "purse",    name: "Prall gefüllter Beutel", desc: "+10 max. Gold je Stufe.", max: 8, costs: [6, 12, 18, 24, 30, 36, 42, 48], effects: { maxMoney: 10 } }
 ];
 const legacyCfg = (id) => LEGACY_CONFIG.find(l => l.id === id);
 
@@ -33,7 +33,7 @@ function eternalPct() {
     return ETERNAL_PCT_FIRST * Math.min(e, 100) + ETERNAL_PCT_AFTER * Math.max(0, e - 100);
 }
 function goldMult() { return 1 + eternalPct(); }
-function enemyScale() { return 1 + PAGE_ENEMY_SCALE * state.meta.pages; }
+function enemyScale() { return Math.pow(1 + PAGE_ENEMY_SCALE, state.meta.pages); }
 function skillXpMult() { return 1 + 0.1 * legacyLevel("learner"); }
 function legacyBonus(name) {
     let total = 0;

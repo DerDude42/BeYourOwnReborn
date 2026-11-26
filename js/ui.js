@@ -536,6 +536,36 @@ function updateMenus() {
 
 let currentTab = 'actions';
 
+const EFFECT_LABELS = { atk: "Angriff", maxHealth: "Max. Gesundheit", maxEnergy: "Max. Energie", energyRegen: "Energie/Tick", healthRegen: "Gesundheit/Tick", maxMoney: "Max. Gold", begBonus: "Betteln", sleepBonus: "Ausruhen" };
+function showNextEquipOffer() {
+    const dlg = document.getElementById('equip-dlg');
+    if (!dlg || !dlg.hidden) return;
+    while (equipOffers.length && (!GEAR[equipOffers[0]] || gearCount(equipOffers[0]) <= 0 || isEquipped(equipOffers[0]))) equipOffers.shift();
+    if (!equipOffers.length) return;
+    const id = equipOffers[0], g = GEAR[id], slot = targetSlotFor(id), cur = state.equipped[slot];
+    document.getElementById('equip-title').textContent = `Neu: ${g.name}`;
+    const box = document.getElementById('equip-compare');
+    box.textContent = "";
+    const line = (t, cls) => { const d = document.createElement('div'); d.className = cls || 'btn-desc'; d.textContent = t; box.appendChild(d); };
+    line(`${g.category} · ${g.desc}`);
+    line(cur ? `Aktuell (${SLOT_CONFIG[slot].name}): ${GEAR[cur].name} · ${GEAR[cur].desc}` : `${SLOT_CONFIG[slot].name}: noch leer`);
+    const keys = new Set([...Object.keys(g.effects), ...Object.keys(cur ? GEAR[cur].effects : {})]);
+    for (const k of keys) {
+        const a = cur ? (GEAR[cur].effects[k] || 0) : 0, b = g.effects[k] || 0, d = b - a;
+        line(`${EFFECT_LABELS[k] || k}: ${fmt(a)} → ${fmt(b)} (${d >= 0 ? "+" : ""}${fmt(d)})`, 'stat-row');
+    }
+    const yes = document.getElementById('equip-yes'), no = document.getElementById('equip-no');
+    const done = (take) => {
+        dlg.hidden = true;
+        equipOffers.shift();
+        if (take && gearCount(id) > 0) setSlot(slot, id);
+        showNextEquipOffer();
+    };
+    yes.onclick = () => done(true);
+    no.onclick = () => done(false);
+    dlg.hidden = false;
+}
+
 function showTab(name) {
     currentTab = name;
     if (name === 'inventory' && ui.invTab) ui.invTab.classList.remove('flash');

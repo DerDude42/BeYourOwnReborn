@@ -4,7 +4,7 @@
    Ablauf: Boss besiegen gibt einen Siegelstein; mit drei Siegelsteinen öffnet sich die Tempelpforte.
    Alle Werte sind Startwerte und werden per Bot-Simulation abgestimmt (siehe REGION_TUNING).
    ================================================================= */
-const REGION_TUNING = { time: 1 }; // Multiplikator auf Dauern (zum Abstimmen der Spielzeit)
+const REGION_TUNING = { time: 1.5 }; // Multiplikator auf Dauern (zum Abstimmen der Spielzeit)
 const T = (n) => Math.max(1, Math.round(n * REGION_TUNING.time));
 
 const REGION_CONFIG = [
@@ -16,7 +16,7 @@ const REGION_CONFIG = [
         train: { name: "Moorlauf", cost: { money: 20 }, drain: { energy: 1, health: 0.3 }, duration: 30, levelBonus: { health: 2, energy: 1 }, atkPerUse: 0.1 },
         room: { name: "Moorgeister", enemies: [ { name: "Irrlicht", hp: 20, atk: 1.5, speed: 0.7 }, { name: "Sumpfkröte", hp: 40, atk: 2.5, speed: 0.6 } ], pet: { id: "toad", enemy: "Sumpfkröte", egg: "eggToad", name: "Sumpfkröte", effects: { maxEnergy: 2 }, atk: 0.6, speed: 0.6, hatch: 150, desc: "+2 max. Energie" },
                 gear: { id: "swampPearlNeck", name: "Sumpfperle", desc: "+4 max. Energie · +0,05 Energie/Tick", effects: { maxEnergy: 4, energyRegen: 0.05 }, slot: "neck", category: "Amulett" } },
-        boss: { name: "Hexe Morwen", hp: 70, atk: 2.6, speed: 0.8, seal: "Siegelstein des Moores",
+        boss: { name: "Hexe Morwen", hp: 86, atk: 2.6, speed: 0.8, seal: "Siegelstein des Moores",
                 gear: [ { id: "willowBlade", name: "Irrlichtklinge", desc: "+2 Angriff", effects: { atk: 2 }, slot: "weapon", category: "Waffe 1-Hand" },
                         { id: "mooreather", name: "Moorleder", desc: "+10 max. Gesundheit", effects: { maxHealth: 10 }, slot: "body", category: "Körper" } ] },
         materials: { moorHerb: { name: "Moorkraut", value: 2 }, swampPearl: { name: "Sumpfperle (roh)", value: 6 } }
@@ -29,7 +29,7 @@ const REGION_CONFIG = [
         train: { name: "Klettern am Kaltgrat", cost: { money: 40 }, drain: { energy: 1.5, health: 0.5 }, duration: 40, levelBonus: { health: 3, energy: 1 }, atkPerUse: 0.15 },
         room: { name: "Eiswind-Pass", enemies: [ { name: "Eiswolf", hp: 60, atk: 3.5, speed: 0.8 }, { name: "Bergluchs", hp: 90, atk: 5, speed: 0.7 } ], pet: { id: "lynx", enemy: "Bergluchs", egg: "eggLynx", name: "Bergluchs", effects: { atk: 0.3 }, atk: 1, speed: 0.7, hatch: 200, desc: "+0,3 Angriff" },
                 gear: { id: "iceAmulet", name: "Bergkristall-Anhänger", desc: "+6 max. Energie", effects: { maxEnergy: 6 }, slot: "neck", category: "Amulett" } },
-        boss: { name: "Frostriese Hrungnir", hp: 120, atk: 3.5, speed: 0.7, seal: "Siegelstein des Gebirges",
+        boss: { name: "Frostriese Hrungnir", hp: 240, atk: 3.5, speed: 0.7, seal: "Siegelstein des Gebirges",
                 gear: [ { id: "frostAxe", name: "Frostaxt", desc: "+3,5 Angriff", effects: { atk: 3.5 }, slot: "weapon", category: "Waffe 1-Hand" },
                         { id: "frostMantle", name: "Eisbärenmantel", desc: "+18 max. Gesundheit", effects: { maxHealth: 18 }, slot: "body", category: "Körper" } ] },
         materials: { iceCrystal: { name: "Eiskristall", value: 4 }, mountainGem: { name: "Bergkristall", value: 10 } }
@@ -42,7 +42,7 @@ const REGION_CONFIG = [
         train: { name: "Aschenmarsch", cost: { money: 60 }, drain: { energy: 2, health: 0.8 }, duration: 50, levelBonus: { health: 4, energy: 2 }, atkPerUse: 0.2 },
         room: { name: "Verbrannte Gassen", enemies: [ { name: "Aschegeist", hp: 100, atk: 6, speed: 0.9 }, { name: "Aschenrabe", hp: 140, atk: 8, speed: 0.8 } ], pet: { id: "raven", enemy: "Aschenrabe", egg: "eggRaven", name: "Aschenrabe", effects: { maxHealth: 5 }, atk: 1.5, speed: 0.8, hatch: 250, desc: "+5 max. Gesundheit" },
                 gear: { id: "emberRing", name: "Glutamulett", desc: "+8 max. Energie · +0,1 Energie/Tick", effects: { maxEnergy: 8, energyRegen: 0.1 }, slot: "neck", category: "Amulett" } },
-        boss: { name: "Ascheritter Valdric", hp: 160, atk: 4.4, speed: 0.8, seal: "Siegelstein der Ruinen",
+        boss: { name: "Ascheritter Valdric", hp: 340, atk: 4.4, speed: 0.8, seal: "Siegelstein der Ruinen",
                 gear: [ { id: "ashSword", name: "Aschenschwert", desc: "+5 Angriff", effects: { atk: 5 }, slot: "weapon", category: "Waffe 1-Hand" },
                         { id: "ashPlate", name: "Aschenharnisch", desc: "+30 max. Gesundheit", effects: { maxHealth: 30 }, slot: "body", category: "Körper" } ] },
         materials: { ashCoal: { name: "Aschekohle", value: 6 }, emberStone: { name: "Glutstein", value: 15 } }
@@ -91,10 +91,10 @@ for (const r of REGION_CONFIG) {
           visible: () => usesOf(missionOf(k)) >= 1, cost: r.train.cost, drain: r.train.drain, duration: T(r.train.duration), maxUses: 10,
           levelBonus: r.train.levelBonus, atkPerUse: r.train.atkPerUse,
           info: () => `Level ${usesOf(`train${k}`)}/10 · ${r.train.cost.money} Gold · -${r.train.drain.energy} Energie/Tick · Dauer ${T(r.train.duration)} Ticks · +${r.train.levelBonus.health} max. Gesundheit, +${r.train.levelBonus.energy} max. Energie, +${r.train.atkPerUse} Angriff je Level` },
-        { id: reportOf(k), tab: "training", name: `Bericht an den Dorfvorsteher: ${r.name}`, desc: `Berichte von deinem Sieg. Belohnung: Der maximale Ruhm steigt.`,
+        { id: reportOf(k), tab: "training", name: `Bericht an den Dorfvorsteher: ${r.name}`, desc: `Berichte von deinem Sieg. Belohnung: Der maximale Ruhm steigt und dein Ruhm wird aufgefüllt.`,
           visible: () => winsOf(bossOf(k)) >= 1, duration: T(5), maxUses: 1, noCrit: true,
-          onComplete: () => { state.flags[r.capFlag] = true; const m = `Max. Ruhm erhöht (${resMax("fame")})`; showToast(m); return m; },
-          info: () => `Dauer ${T(5)} Ticks · Belohnung: max. Ruhm +${FAME_CAP_FLAGS[r.capFlag]}` }
+          onComplete: () => { state.flags[r.capFlag] = true; fillFame(); const m = `Max. Ruhm erhöht, Ruhm aufgefüllt (${resMax("fame")})`; showToast(m); return m; },
+          info: () => `Dauer ${T(5)} Ticks · Belohnung: max. Ruhm +${FAME_CAP_FLAGS[r.capFlag]}, Ruhm wird aufgefüllt` }
     );
 
     BATTLE_CONFIG.push(
@@ -104,7 +104,7 @@ for (const r of REGION_CONFIG) {
           onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === `room${k}`).loot) },
         { id: bossOf(k), scale: true, name: `Wächter: ${r.boss.name}`, desc: `Der Wächter des Siegelsteins in ${r.name}.`, visible: () => usesOf(exploreOf(k)) >= 8,
           enemies: [ { name: r.boss.name, hp: r.boss.hp, atk: r.boss.atk, speed: r.boss.speed } ],
-          loot: [ { chance: 1, item: `seal${k}`, amount: 1 }, ...r.boss.gear.map(g => ({ chance: 1, item: g.id, amount: 1 })), { chance: 1, give: { fame: 5 }, when: () => winsOf(bossOf(k)) <= 1 } ], // Ruhm nur für den ersten Sieg
+          loot: [ { chance: 1, item: `seal${k}`, amount: 1 }, ...r.boss.gear.map(g => ({ chance: 1, item: g.id, amount: 1 })) ],
           onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === bossOf(k)).loot) }
     );
 }
@@ -122,7 +122,7 @@ ACTIVITY_CONFIG.push({
 BATTLE_CONFIG.push({
     id: "finale", scale: true, name: "Wächter der Chronik", desc: "Der letzte Wächter hütet die Chronik der Ahnen.",
     visible: () => usesOf("openTemple") >= 1,
-    enemies: [ { name: "Wächter der Chronik", hp: 280, atk: 5, speed: 0.9 } ],
-    loot: [ { chance: 1, item: "chronicleKey", amount: 1 }, { chance: 1, give: { fame: 10 }, when: () => winsOf("finale") <= 1 } ],
+    enemies: [ { name: "Wächter der Chronik", hp: 350, atk: 5, speed: 0.9 } ],
+    loot: [ { chance: 1, item: "chronicleKey", amount: 1 } ],
     onWin: () => rollLoot(BATTLE_CONFIG.find(b => b.id === "finale").loot)
 });
